@@ -1,1 +1,2 @@
+# Core dependency used by `API.py` for optional HTTP-based search requests
 requests==2.32.5

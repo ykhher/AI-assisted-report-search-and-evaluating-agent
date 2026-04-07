@@ -1,0 +1,210 @@
+[
+  {
+    "id": "R001",
+    "title": "Global Energy Perspective 2024",
+    "source": "McKinsey & Company",
+    "year": 2024,
+    "url": "https://www.mckinsey.com/~/media/mckinsey/industries/energy%20and%20materials/our%20insights/global%20energy%20perspective%202024/global-energy-perspective-2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R002",
+    "title": "Global Materials Perspective 2024",
+    "source": "McKinsey & Company",
+    "year": 2024,
+    "url": "https://www.mckinsey.com/~/media/mckinsey/industries/energy%20and%20materials/our%20insights/global%20materials%20perspective%202024/global-materials-perspective-2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R003",
+    "title": "The Next Big Arenas of Competition",
+    "source": "McKinsey Global Institute",
+    "year": 2024,
+    "url": "https://www.mckinsey.com/~/media/mckinsey/mckinsey%20global%20institute/our%20research/the%20next%20big%20arenas%20of%20competition/the-next-big-arenas-of-competition_final.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R004",
+    "title": "McKinsey Global Private Markets Review 2024",
+    "source": "McKinsey & Company",
+    "year": 2024,
+    "url": "https://www.mckinsey.com/~/media/mckinsey/industries/private%20equity%20and%20principal%20investors/our%20insights/mckinseys%20global%20private%20markets%20report/2024/mckinsey-global-private-markets-review-2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R005",
+    "title": "Global Economic Prospects, January 2024",
+    "source": "World Bank",
+    "year": 2024,
+    "url": "https://thedocs.worldbank.org/en/doc/661f109500bf58fa36a4a46eeace6786-0050012024/original/GEP-Jan-2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R006",
+    "title": "Global Economic Prospects, June 2024",
+    "source": "World Bank",
+    "year": 2024,
+    "url": "https://openknowledge.worldbank.org/bitstreams/04f7abbd-ed50-400f-84e5-359d75c77f20/download",
+    "has_forecast": true
+  },
+  {
+    "id": "R007",
+    "title": "Commodity Markets Outlook, April 2024",
+    "source": "World Bank",
+    "year": 2024,
+    "url": "https://openknowledge.worldbank.org/server/api/core/bitstreams/10913920-7b3d-4323-8ccc-43e764336dd2/content",
+    "has_forecast": true
+  },
+  {
+    "id": "R008",
+    "title": "Global Economic Prospects, January 2024: Europe and Central Asia Analysis",
+    "source": "World Bank",
+    "year": 2024,
+    "url": "https://thedocs.worldbank.org/en/doc/661f109500bf58fa36a4a46eeace6786-0050012024/related/GEP-Jan-2024-Analysis-ECA.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R009",
+    "title": "Global Economic Prospects, January 2024: Sub-Saharan Africa Analysis",
+    "source": "World Bank",
+    "year": 2024,
+    "url": "https://thedocs.worldbank.org/en/doc/661f109500bf58fa36a4a46eeace6786-0050012024/related/GEP-Jan-2024-Analysis-SSA.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R010",
+    "title": "Global Economic Prospects, January 2024: Latin America and the Caribbean Analysis",
+    "source": "World Bank",
+    "year": 2024,
+    "url": "https://thedocs.worldbank.org/en/doc/661f109500bf58fa36a4a46eeace6786-0050012024/related/GEP-Jan-2024-Analysis-LAC.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R011",
+    "title": "Steel Market Developments, Q2 2024",
+    "source": "OECD",
+    "year": 2024,
+    "url": "https://one.oecd.org/document/DSTI/SC(2024)1/FINAL/en/pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R012",
+    "title": "Latest Developments in Steelmaking Capacity and Outlook Until 2026",
+    "source": "OECD",
+    "year": 2024,
+    "url": "https://one.oecd.org/document/DSTI/SC(2024)3/FINAL/en/pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R013",
+    "title": "OECD-FAO Agricultural Outlook 2024-2033",
+    "source": "OECD and FAO",
+    "year": 2024,
+    "url": "https://one.oecd.org/document/TAD/CA/APM/WP(2024)2/FINAL/en/pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R014",
+    "title": "Steel Market Developments, Q4 2023",
+    "source": "OECD",
+    "year": 2023,
+    "url": "https://one.oecd.org/document/DSTI/SC(2023)9/FINAL/en/pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R015",
+    "title": "Latest Developments in Steelmaking Capacity",
+    "source": "OECD",
+    "year": 2023,
+    "url": "https://one.oecd.org/document/DSTI/SC(2023)10/FINAL/en/pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R016",
+    "title": "OECD-FAO Agricultural Outlook 2025-2034 Executive Summary",
+    "source": "OECD and FAO",
+    "year": 2025,
+    "url": "https://www.oecd.org/content/dam/fao-agri-outlook/en/pdfs/AgriOutlook25_ExecSum_EN.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R017",
+    "title": "Technology Trends Outlook 2024",
+    "source": "McKinsey & Company",
+    "year": 2024,
+    "url": "https://www.mckinsey.com/~/media/mckinsey/business%20functions/mckinsey%20digital/our%20insights/the%20top%20trends%20in%20tech%202024/mckinsey-technology-trends-outlook-2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R018",
+    "title": "The Economic Potential of Generative AI: The Next Productivity Frontier",
+    "source": "McKinsey & Company",
+    "year": 2023,
+    "url": "https://www.mckinsey.com/~/media/mckinsey/business%20functions/mckinsey%20digital/our%20insights/the%20economic%20potential%20of%20generative%20ai%20the%20next%20productivity%20frontier/the-economic-potential-of-generative-ai-the-next-productivity-frontier.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R019",
+    "title": "The State of AI in Early 2024",
+    "source": "McKinsey & Company",
+    "year": 2024,
+    "url": "https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai-2024",
+    "has_forecast": true
+  },
+  {
+    "id": "R020",
+    "title": "Artificial Intelligence Index Report 2024",
+    "source": "Stanford HAI",
+    "year": 2024,
+    "url": "https://hai.stanford.edu/assets/files/hai_ai-index-report-2024-smaller2.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R021",
+    "title": "CHAPTER 4: Index Report 2024 Economy",
+    "source": "Stanford HAI",
+    "year": 2024,
+    "url": "https://hai.stanford.edu/assets/files/hai_ai-index-report-2024_chapter4.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R022",
+    "title": "Assessing Potential Future Artificial Intelligence Risks, Benefits and Policy Imperatives",
+    "source": "OECD.AI",
+    "year": 2024,
+    "url": "https://oecd.ai/en/futuresreport",
+    "has_forecast": true
+  },
+  {
+    "id": "R023",
+    "title": "Macroeconomic Productivity Gains from Artificial Intelligence in G7 Economies",
+    "source": "OECD.AI",
+    "year": 2024,
+    "url": "https://oecd.ai/en/ai-publications/macroeconomic-productivity-gains-from-artificial-intelligence-in-g7-economies",
+    "has_forecast": true
+  },
+  {
+    "id": "R024",
+    "title": "An Analysis of Generative Artificial Intelligence and International Trade 2024",
+    "source": "World Economic Forum",
+    "year": 2024,
+    "url": "https://www3.weforum.org/docs/WEF_An_Analysis_of_Generative_Artificial_Intelligence_and_International_Trade_2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R025",
+    "title": "Unlocking Value from Generative AI",
+    "source": "World Economic Forum",
+    "year": 2024,
+    "url": "https://www3.weforum.org/docs/WEF_Unlocking_Value_from_Generative_AI_2024.pdf",
+    "has_forecast": true
+  },
+  {
+    "id": "R026",
+    "title": "Top 10 Emerging Technologies of 2024",
+    "source": "World Economic Forum",
+    "year": 2024,
+    "url": "https://www3.weforum.org/docs/WEF_Top_10_Emerging_Technologies_of_2024.pdf",
+    "has_forecast": true
+  }
+]
