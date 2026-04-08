@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from extractor import extract_signals, is_report, source_score
 from filter import filter_results
+from local_qwen import get_local_qwen_status, rewrite_search_query
 from scoring import compute_rqi, final_score, generate_reason, rank_reports
 from search import search_once
 
@@ -21,10 +22,14 @@ _YEAR_PATTERN = re.compile(r"\b(?:19|20)\d{2}\b")
 
 
 def refine_query(query: str) -> str:
-    """Expand a user query with report-friendly search terms."""
+    """Expand a user query with report-friendly terms, optionally using the local Qwen model."""
     cleaned = " ".join(str(query or "").strip().split())
     if not cleaned:
         cleaned = "industry report"
+
+    rewritten = rewrite_search_query(cleaned)
+    if rewritten:
+        cleaned = rewritten
 
     lower = cleaned.lower()
     missing_terms = [term for term in _BASE_HINTS if term not in lower]
@@ -107,7 +112,12 @@ def _compute_relevance(query: str, text: str) -> float:
     return round(min(overlap_ratio + exact_phrase_boost, 1.0), 3)
 
 
-def _score_cached_results(cached_results: list[dict[str, Any]], refined_query: str, iteration: int) -> list:
+def _score_cached_results(
+    cached_results: list[dict[str, Any]],
+    refined_query: str,
+    iteration: int,
+    top_k: int = 10,
+) -> list:
     """Process cached API results locally without making any additional API calls."""
     topic_terms = _topic_terms(refined_query)
     query_words = [word for word in re.findall(r"[a-z0-9]+", refined_query.lower()) if len(word) > 2]
@@ -144,7 +154,8 @@ def _score_cached_results(cached_results: list[dict[str, Any]], refined_query: s
             continue
 
         signals = extract_signals(combined_text, metadata)
-        signals["source"] = source_score(source)
+        signals["source_name"] = str(source)
+        signals["source"] = source_score(source, combined_text)
         signals["_text"] = combined_text
         relevance = _compute_relevance(refined_query, combined_text)
         relevance = min(relevance + 0.05 * min(topic_overlap, 3), 1.0)
@@ -165,13 +176,19 @@ def _score_cached_results(cached_results: list[dict[str, Any]], refined_query: s
             "reason": reason,
         })
 
-    ranked_results = rank_reports(prepared_reports)
+    ranked_results = rank_reports(prepared_reports, top_k=top_k)
     return ranked_results
 
 
-def agent_pipeline(query: str, max_iters: int = 2) -> list:
-    """Run the agent loop while calling the real search API only once."""
-    cached_results = search_once(query)
+def agent_pipeline(query: str, max_iters: int = 2, top_k: int = 10) -> list:
+    """Run the agent loop while calling the real search API only once and return the top ranked reports."""
+    qwen_status = get_local_qwen_status()
+    if qwen_status["available"]:
+        print(f"[agent] Local Qwen enabled: {qwen_status['model_path']}")
+
+    search_query = refine_query(query)
+    print(f"[agent] Initial search query: {search_query}")
+    cached_results = search_once(search_query, count=max(20, top_k * 2))
     if not cached_results:
         print("[agent] Search API failed or returned no results.")
         return []
@@ -184,7 +201,7 @@ def agent_pipeline(query: str, max_iters: int = 2) -> list:
         print(f"[agent] Iteration {iteration + 1} query: {refined_query}")
         print(f"[agent] Reusing {len(cached_results)} cached API result(s)")
 
-        results = _score_cached_results(cached_results, refined_query, iteration)
+        results = _score_cached_results(cached_results, refined_query, iteration, top_k=top_k)
         if not results:
             print("[agent] No valid reports found in cached results.")
             return []
@@ -201,9 +218,9 @@ def agent_pipeline(query: str, max_iters: int = 2) -> list:
 
         if quality == "ok":
             print("[agent] Result quality is sufficient; stopping early.")
-            return results
+            return results[:top_k]
 
-    return best_results
+    return best_results[:top_k]
 
 
 if __name__ == "__main__":

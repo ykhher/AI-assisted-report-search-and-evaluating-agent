@@ -62,7 +62,8 @@ def score_dataset(query: str) -> list[dict]:
         }
 
         signals = extract_signals(text, metadata)
-        signals["source"] = source_score(metadata["source"])
+        signals["source_name"] = str(metadata["source"])
+        signals["source"] = source_score(metadata["source"], text)
         signals["_text"] = text
 
         relevance = compute_relevance(query, text)

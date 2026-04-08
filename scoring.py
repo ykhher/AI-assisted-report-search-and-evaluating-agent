@@ -6,6 +6,9 @@ import json
 import re
 from typing import Any
 
+from extractor import bottom_reference_score, footnote_score, institution_score
+from local_qwen import assess_text_signals
+
 _SECTION_KEYWORDS = ("introduction", "methodology", "results", "conclusion")
 _CLAIM_KEYWORDS = ("increase", "decrease", "forecast", "projected", "expected")
 _CITATION_BRACKET_PATTERN = re.compile(r"\[\d+\]")
@@ -51,76 +54,70 @@ def compute_claim_density(text: str) -> float:
 
 
 def in_text_citation_score(text: str) -> float:
-    """Detect academic-style in-text citations like `[1]` and `(2024)`."""
-    raw_text = str(text)
-    count = (
-        len(_CITATION_BRACKET_PATTERN.findall(raw_text))
-        + len(_CITATION_YEAR_PATTERN.findall(raw_text))
-    )
-    return round(min(count / 20, 1.0), 3)
+    """Backward-compatible wrapper for inline footnote detection."""
+    return footnote_score(text)
 
 
 def reference_section_score(text: str) -> float:
-    """Detect a reference section and count lines that look like references."""
-    raw_text = str(text)
-    lowered = raw_text.lower()
-    section_positions = [lowered.rfind(keyword) for keyword in _REFERENCE_SECTION_KEYWORDS if keyword in lowered]
-    if not section_positions:
-        return 0.0
-
-    section_start = max(section_positions)
-    section_text = raw_text[section_start:]
-    lines = [line.strip() for line in section_text.splitlines() if line.strip()]
-    if len(lines) <= 1:
-        lines = [segment.strip() for segment in re.split(r"(?<=[.;])\s+", section_text) if segment.strip()]
-
-    reference_lines = 0
-    for line in lines[1:]:
-        word_count = len(re.findall(r"\b\w+\b", line))
-        if "http" in line.lower() or "www" in line.lower() or word_count > 8:
-            reference_lines += 1
-
-    return round(min(reference_lines / 20, 1.0), 3)
+    """Backward-compatible wrapper for numbered bottom-reference detection."""
+    return bottom_reference_score(text)
 
 
 def numbered_reference_score(text: str) -> float:
-    """Detect numbered reference lines like `1. McKinsey (2023)`."""
-    count = len(_NUMBERED_REFERENCE_PATTERN.findall(str(text)))
-    return round(min(count / 15, 1.0), 3)
+    """Backward-compatible wrapper for numbered bottom-reference detection."""
+    return bottom_reference_score(text)
 
 
 def compute_citation_score(text: str) -> float:
-    """Combine academic and industry-style reference evidence into one citation score."""
-    base_score = max(in_text_citation_score(text), reference_section_score(text))
-    boosted_score = base_score + 0.3 * numbered_reference_score(text)
-    return round(min(boosted_score, 1.0), 3)
+    """Blend heuristic and local-LLM evidence for report references and source support."""
+    heuristic_score = max(
+        bottom_reference_score(text),
+        footnote_score(text),
+    )
+    heuristic_score += 0.2 * institution_score(text)
+
+    llm_scores = assess_text_signals(str(text))
+    return round(min(max(heuristic_score, _clamp01(llm_scores.get("reference_score", 0.0))), 1.0), 3)
 
 
 def compute_consistency_score(text: str) -> float:
-    """Measure whether detected sections also contain numbers or analytical claims."""
+    """Blend structural consistency heuristics with local LLM judgement."""
     lowered = str(text).lower()
     detected_sections = [section for section in _SECTION_KEYWORDS if section in lowered]
-    if not detected_sections:
-        return 0.0
 
-    valid_sections = 0
-    for section in detected_sections:
-        start = lowered.find(section)
-        next_positions = [lowered.find(other, start + 1) for other in _SECTION_KEYWORDS if lowered.find(other, start + 1) != -1]
-        end = min(next_positions) if next_positions else len(lowered)
-        segment = lowered[start:end]
+    heuristic_score = 0.0
+    if detected_sections:
+        valid_sections = 0
+        for section in detected_sections:
+            start = lowered.find(section)
+            next_positions = [lowered.find(other, start + 1) for other in _SECTION_KEYWORDS if lowered.find(other, start + 1) != -1]
+            end = min(next_positions) if next_positions else len(lowered)
+            segment = lowered[start:end]
 
-        has_number = bool(_NUMBER_PATTERN.search(segment))
-        has_claim = any(keyword in segment for keyword in _CLAIM_KEYWORDS)
-        if has_number or has_claim:
-            valid_sections += 1
+            has_number = bool(_NUMBER_PATTERN.search(segment))
+            has_claim = any(keyword in segment for keyword in _CLAIM_KEYWORDS)
+            if has_number or has_claim:
+                valid_sections += 1
 
-    return round(valid_sections / len(detected_sections), 3)
+        heuristic_score = round(valid_sections / len(detected_sections), 3)
+
+    llm_scores = assess_text_signals(str(text))
+    return round(max(heuristic_score, _clamp01(llm_scores.get("consistency_score", 0.0))), 3)
+
+
+_METHODOLOGY_SELECTIVE_THRESHOLD = 0.65
+_METHODOLOGY_CONFIDENCE_THRESHOLD = 0.60
+_CITATION_SELECTIVE_THRESHOLD = 0.60
+_CITATION_CONFIDENCE_THRESHOLD = 0.50
+_STRUCTURE_CONFIDENCE_THRESHOLD = 0.55
+_CONSISTENCY_CONFIDENCE_THRESHOLD = 0.55
 
 
 def compute_rqi(signals: dict, text: str = "") -> float:
     """Compute the upgraded Report Quality Index (RQI) with stronger score separation."""
     raw_text = text or str(signals.get("_text", ""))
+    source_context = str(signals.get("source_name", signals.get("source_label", "")))
+    llm_scores = assess_text_signals(raw_text, source=source_context)
 
     structure_score = _clamp01(signals.get("structure_score", compute_structure_score(raw_text)))
     claim_density = _clamp01(signals.get("claim_density", compute_claim_density(raw_text)))
@@ -132,29 +129,41 @@ def compute_rqi(signals: dict, text: str = "") -> float:
     signals["citation_score"] = citation_score
     signals["consistency_score"] = consistency_score
 
-    methodology = _clamp01(signals.get("methodology", signals.get("has_methodology", 0)))
+    methodology = max(
+        _clamp01(signals.get("methodology", signals.get("has_methodology", 0))),
+        _clamp01(llm_scores.get("methodology_score", 0.0)),
+    )
     data_density = _clamp01(signals.get("data_density", 0))
-    source = _clamp01(signals.get("source", signals.get("source_reputation", 0)))
+    source = max(
+        _clamp01(signals.get("source", signals.get("source_reputation", 0))),
+        _clamp01(llm_scores.get("source_score", 0.0)),
+    )
     recency = _clamp01(signals.get("recency", 0))
     data_component = data_density ** 1.3
 
+    signals["methodology"] = round(methodology, 3)
     signals["data_component"] = round(data_component, 3)
 
     rqi = (
         0.12 * methodology
-        + 0.22 * citation_score
+        + 0.20 * citation_score
         + 0.15 * data_component
-        + 0.15 * source
+        + 0.14 * source
         + 0.10 * recency
-        + 0.13 * structure_score
-        + 0.08 * claim_density
+        + 0.12 * structure_score
+        + 0.07 * claim_density
+        + 0.10 * consistency_score
     )
 
-    selective_boost = methodology == 1.0 and citation_score > 0.6
+    selective_boost = (
+        methodology >= _METHODOLOGY_SELECTIVE_THRESHOLD
+        and citation_score >= _CITATION_SELECTIVE_THRESHOLD
+    )
     confidence_boost = (
-        methodology == 1.0
-        and citation_score > 0.5
-        and structure_score > 0.7
+        methodology >= _METHODOLOGY_CONFIDENCE_THRESHOLD
+        and citation_score >= _CITATION_CONFIDENCE_THRESHOLD
+        and structure_score >= _STRUCTURE_CONFIDENCE_THRESHOLD
+        and consistency_score >= _CONSISTENCY_CONFIDENCE_THRESHOLD
     )
 
     if selective_boost:
@@ -179,7 +188,7 @@ def generate_reason(signals: dict, relevance: float | None = None) -> str:
     """Generate a deterministic explanation string from signal and relevance rules."""
     reasons: list[str] = []
 
-    if _clamp01(signals.get("methodology", signals.get("has_methodology", 0))) == 1.0:
+    if _clamp01(signals.get("methodology", signals.get("has_methodology", 0))) >= _METHODOLOGY_CONFIDENCE_THRESHOLD:
         reasons.append("contains methodology")
 
     if _clamp01(signals.get("citation_score", 0)) >= 0.3:
@@ -223,8 +232,8 @@ def build_reason(signals: dict, rqi: float | None = None, relevance: float | Non
     return generate_reason(signals, relevance=relevance)
 
 
-def rank_reports(reports: list) -> list:
-    """Compute RQI, final score, and explanation for each report, then rank them."""
+def rank_reports(reports: list, top_k: int | None = 10) -> list:
+    """Compute RQI, final score, and explanation for each report, then return the top ranked items."""
     ranked = []
 
     for report in reports:
@@ -244,7 +253,9 @@ def rank_reports(reports: list) -> list:
         })
 
     ranked.sort(key=lambda item: item["score"], reverse=True)
-    return ranked
+    if top_k is None:
+        return ranked
+    return ranked[:max(1, top_k)]
 
 
 if __name__ == "__main__":
@@ -292,7 +303,8 @@ if __name__ == "__main__":
 
     for case in test_cases:
         signals = extract_signals(case["text"], case["metadata"])
-        signals["source"] = source_score(case["metadata"]["source"])
+        signals["source_name"] = str(case["metadata"]["source"])
+        signals["source"] = source_score(case["metadata"]["source"], case["text"])
         signals["_text"] = case["text"]
 
         rqi = compute_rqi(signals, case["text"])

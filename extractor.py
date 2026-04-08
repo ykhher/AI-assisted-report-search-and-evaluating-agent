@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+from local_qwen import assess_text_signals
+
 _CURRENT_YEAR = 2026
 _METHODOLOGY_KEYWORDS = (
     "methodology",
@@ -17,10 +19,27 @@ _METHODOLOGY_KEYWORDS = (
     "we analyzed",
 )
 _NUMBER_PATTERN = re.compile(r"\b\d+(?:[.,]\d+)?%?\b")
-_CITATION_BRACKET_PATTERN = re.compile(r"\[\d+\]")
-_CITATION_YEAR_PATTERN = re.compile(r"\((?:19|20)\d{2}\)")
-_NUMBERED_REFERENCE_PATTERN = re.compile(r"(?:^|\n)\s*\d+\.\s", re.MULTILINE)
-_REFERENCE_SECTION_KEYWORDS = ("references", "bibliography", "sources")
+_INLINE_FOOTNOTE_PATTERN = re.compile(
+    r"(?:(?<=[A-Za-z\)\].,;:\[])\s*(?P<num>(?:[1-9]|[12]\d|30))(?=(?:\s|$|[)\].,;:]))|(?P<sup>[⁰¹²³⁴⁵⁶⁷⁸⁹]+))"
+)
+_BOTTOM_REFERENCE_LINE_PATTERN = re.compile(
+    r"^\s*(?P<num>(?:[1-9]|[12]\d|30))[.)]?\s+(?P<line>.+)$",
+    re.MULTILINE,
+)
+_REFERENCE_HINT_PATTERN = re.compile(
+    r"\b(?:source|report|analysis|outlook|study|dataset|data)\b",
+    re.IGNORECASE,
+)
+_URL_OR_YEAR_PATTERN = re.compile(r"(?:https?://|www\.|\b(?:19|20)\d{2}\b)", re.IGNORECASE)
+_INSTITUTION_PATTERNS = (
+    re.compile(r"\biea\b", re.IGNORECASE),
+    re.compile(r"\bipcc\b", re.IGNORECASE),
+    re.compile(r"(?:\bun\b|\bunited nations\b)", re.IGNORECASE),
+    re.compile(r"\bworld bank\b", re.IGNORECASE),
+    re.compile(r"\bmckinsey\b", re.IGNORECASE),
+    re.compile(r"\boxford economics\b", re.IGNORECASE),
+)
+_SUPERSCRIPT_TRANSLATION = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
 _SECTION_NAMES = (
     "introduction",
     "methodology",
@@ -54,6 +73,21 @@ _SOURCE_REPUTATION_MAP = {
     ".com": 0.55,
     ".io": 0.45,
 }
+_SOURCE_NAME_SCORES = {
+    "world bank": 0.96,
+    "oecd": 0.94,
+    "iea": 0.92,
+    "ipcc": 0.92,
+    "united nations": 0.90,
+    "un": 0.88,
+    "stanford": 0.88,
+    "mckinsey": 0.84,
+    "oxford economics": 0.84,
+    "world economic forum": 0.82,
+    "bcg": 0.80,
+    "boston consulting group": 0.80,
+    "deloitte": 0.78,
+}
 
 
 def clean_text(text: str) -> str:
@@ -68,50 +102,80 @@ def has_methodology(text: str) -> int:
     return int(matches >= 2)
 
 
-def in_text_citation_score(text: str) -> float:
-    """Detect academic-style in-text citations like `[1]` and `(2024)`."""
+def footnote_score(text: str) -> float:
+    """Detect inline footnote-style citations such as `trend acceleration.1` or superscripts like `¹`."""
     raw_text = str(text)
-    count = (
-        len(_CITATION_BRACKET_PATTERN.findall(raw_text))
-        + len(_CITATION_YEAR_PATTERN.findall(raw_text))
-    )
-    return round(min(count / 20, 1.0), 3)
+    count = 0
+
+    for match in _INLINE_FOOTNOTE_PATTERN.finditer(raw_text):
+        candidate = (match.group("num") or match.group("sup") or "").translate(_SUPERSCRIPT_TRANSLATION)
+        if candidate.isdigit() and 1 <= int(candidate) <= 30:
+            count += 1
+
+    return round(min(count / 30, 1.0), 3)
 
 
-def reference_section_score(text: str) -> float:
-    """Detect a reference section and count lines that look like references."""
+def bottom_reference_score(text: str) -> float:
+    """Detect numbered bottom-of-page source notes without requiring a `References` heading."""
     raw_text = str(text)
-    lowered = raw_text.lower()
-    section_positions = [lowered.rfind(keyword) for keyword in _REFERENCE_SECTION_KEYWORDS if keyword in lowered]
-    if not section_positions:
-        return 0.0
+    count = 0
 
-    section_start = max(section_positions)
-    section_text = raw_text[section_start:]
-    lines = [line.strip() for line in section_text.splitlines() if line.strip()]
-    if len(lines) <= 1:
-        lines = [segment.strip() for segment in re.split(r"(?<=[.;])\s+", section_text) if segment.strip()]
+    for match in _BOTTOM_REFERENCE_LINE_PATTERN.finditer(raw_text):
+        line = match.group("line").strip()
+        if not line:
+            continue
 
-    reference_lines = 0
-    for line in lines[1:]:
-        word_count = len(re.findall(r"\b\w+\b", line))
-        if "http" in line.lower() or "www" in line.lower() or word_count > 8:
-            reference_lines += 1
+        count += 1
+        if len(re.findall(r"\b\w+\b", line)) >= 3:
+            count += 1
+        if _REFERENCE_HINT_PATTERN.search(line):
+            count += 1
+        count += sum(1 for pattern in _INSTITUTION_PATTERNS if pattern.search(line))
+        if _URL_OR_YEAR_PATTERN.search(line):
+            count += 1
 
-    return round(min(reference_lines / 20, 1.0), 3)
-
-
-def numbered_reference_score(text: str) -> float:
-    """Detect numbered reference lines like `1. McKinsey (2023)`."""
-    count = len(_NUMBERED_REFERENCE_PATTERN.findall(str(text)))
     return round(min(count / 15, 1.0), 3)
 
 
+def institution_score(text: str) -> float:
+    """Measure how strongly the text cites authoritative institutions often seen in consulting reports."""
+    cleaned = clean_text(text)
+    total_matches = 0
+    unique_hits = 0
+
+    for pattern in _INSTITUTION_PATTERNS:
+        matches = pattern.findall(cleaned)
+        if matches:
+            total_matches += len(matches)
+            unique_hits += 1
+
+    count = total_matches + unique_hits
+    return round(min(count / 10, 1.0), 3)
+
+
+def in_text_citation_score(text: str) -> float:
+    """Backward-compatible wrapper for inline citation detection."""
+    return footnote_score(text)
+
+
+def reference_section_score(text: str) -> float:
+    """Backward-compatible wrapper for bottom reference detection."""
+    return bottom_reference_score(text)
+
+
+def numbered_reference_score(text: str) -> float:
+    """Backward-compatible wrapper for numbered reference detection."""
+    return bottom_reference_score(text)
+
+
 def compute_citation_score(text: str) -> float:
-    """Combine academic and industry-style reference evidence into one citation score."""
-    base_score = max(in_text_citation_score(text), reference_section_score(text))
-    boosted_score = base_score + 0.3 * numbered_reference_score(text)
-    return round(min(boosted_score, 1.0), 3)
+    """Combine consulting-style citation signals into one robust credibility feature."""
+    citation_score = max(
+        bottom_reference_score(text),
+        footnote_score(text),
+    )
+    citation_score += 0.2 * institution_score(text)
+    return round(min(citation_score, 1.0), 3)
 
 
 def _is_year_token(token: str) -> bool:
@@ -161,8 +225,8 @@ def compute_structure_score(text: str) -> float:
     return round(min(detected / len(_SECTION_NAMES), 1.0), 3)
 
 
-def source_score(source: Any) -> float:
-    """Map a source domain or numeric value to a normalized credibility prior."""
+def source_score(source: Any, context_text: str = "") -> float:
+    """Map a source domain or publisher name to a normalized credibility prior, with optional LLM support."""
     if isinstance(source, (int, float)):
         return round(max(0.0, min(float(source), 1.0)), 3)
 
@@ -170,21 +234,50 @@ def source_score(source: Any) -> float:
     if not source_text:
         return 0.0
 
+    heuristic_score = 0.5
     for suffix, score in _SOURCE_REPUTATION_MAP.items():
         if source_text.endswith(suffix) or suffix in source_text:
-            return score
+            heuristic_score = max(heuristic_score, score)
 
-    return 0.5
+    for name, score in _SOURCE_NAME_SCORES.items():
+        if name in source_text:
+            heuristic_score = max(heuristic_score, score)
+
+    llm_scores = assess_text_signals(str(context_text or ""), source=source_text)
+    llm_source_score = float(llm_scores.get("source_score", 0.0))
+
+    return round(max(heuristic_score, llm_source_score), 3)
 
 
 def extract_signals(text: str, metadata: dict) -> dict:
-    """Extract the required normalized Phase 3 signals."""
+    """Extract normalized credibility signals from real-world report text."""
     raw_text = str(text)
     year = metadata.get("year") if isinstance(metadata, dict) else None
 
+    footnotes = footnote_score(raw_text)
+    bottom_references = bottom_reference_score(raw_text)
+    institutions = institution_score(raw_text)
+    source_name = metadata.get("source", "") if isinstance(metadata, dict) else ""
+    llm_scores = assess_text_signals(raw_text, source=str(source_name))
+
+    methodology = round(max(float(has_methodology(raw_text)), float(llm_scores.get("methodology_score", 0.0))), 3)
+    citation = round(max(compute_citation_score(raw_text), float(llm_scores.get("reference_score", 0.0))), 3)
+    consistency = round(float(llm_scores.get("consistency_score", 0.0)), 3)
+    source_value = round(source_score(source_name, raw_text), 3) if source_name else 0.0
+
     return {
-        "methodology": has_methodology(raw_text),
-        "citation_score": compute_citation_score(raw_text),
+        "methodology": methodology,
+        "footnote_score": footnotes,
+        "bottom_reference_score": bottom_references,
+        "institution_score": institutions,
+        "llm_reference_score": round(float(llm_scores.get("reference_score", 0.0)), 3),
+        "llm_methodology_score": round(float(llm_scores.get("methodology_score", 0.0)), 3),
+        "llm_consistency_score": consistency,
+        "llm_source_score": round(float(llm_scores.get("source_score", 0.0)), 3),
+        "llm_reason": str(llm_scores.get("reason", "")).strip(),
+        "citation_score": citation,
+        "consistency_score": consistency,
+        "source": source_value,
         "data_density": data_density(raw_text),
         "length": length_score(raw_text),
         "recency": recency_score(year),
@@ -229,6 +322,15 @@ if __name__ == "__main__":
             "metadata": {"year": 2024},
         },
         {
+            "name": "Consulting-style footnotes",
+            "text": (
+                "This report shows results.1 Data from IEA and IPCC.2\n"
+                "1 Source: IEA report 2024\n"
+                "2 Source: IPCC analysis"
+            ),
+            "metadata": {"year": 2024},
+        },
+        {
             "name": "Blog-like text",
             "text": (
                 "This blog talks about cool trends and opinions. It has no methodology, no references, and no source list."
@@ -239,11 +341,15 @@ if __name__ == "__main__":
 
     for case in test_cases:
         text = case["text"]
-        print(f"\n--- {case['name']} ---")
-        print(json.dumps({
-            "in_text_citation_score": in_text_citation_score(text),
-            "reference_section_score": reference_section_score(text),
-            "numbered_reference_score": numbered_reference_score(text),
+        summary = {
+            "footnote_score": footnote_score(text),
+            "bottom_reference_score": bottom_reference_score(text),
+            "institution_score": institution_score(text),
             "citation_score": compute_citation_score(text),
             "signals": extract_signals(text, case["metadata"]),
-        }, indent=2))
+        }
+        print(f"\n--- {case['name']} ---")
+        print(json.dumps(summary, indent=2))
+
+        if case["name"] == "Consulting-style footnotes":
+            assert summary["citation_score"] > 0.7, summary

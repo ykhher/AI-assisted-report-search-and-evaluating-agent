@@ -52,10 +52,10 @@ def _compute_relevance(query: str, text: str) -> float:
     return round(min(overlap / len(query_words), 1.0), 3)
 
 
-def run_pipeline(query: str) -> list:
-    """Run the full report discovery and credibility ranking pipeline."""
+def run_pipeline(query: str, top_k: int = 10) -> list:
+    """Run the full report discovery and credibility ranking pipeline and return the top ranked reports."""
     expanded_query = expand_query(query)
-    raw_results = search_reports(query)
+    raw_results = search_reports(query, count=max(20, top_k * 2))
     print(f"[pipeline] Expanded query: {expanded_query}")
     print(f"[pipeline] Retrieved {len(raw_results)} candidate result(s)")
 
@@ -91,7 +91,8 @@ def run_pipeline(query: str) -> list:
             continue
 
         signals = extract_signals(combined_text, metadata)
-        signals["source"] = source_score(metadata.get("source", ""))
+        signals["source_name"] = str(metadata.get("source", ""))
+        signals["source"] = source_score(metadata.get("source", ""), combined_text)
         relevance = _compute_relevance(query, combined_text)
         rqi = compute_rqi(signals)
         score = final_score(relevance, rqi)
@@ -111,13 +112,13 @@ def run_pipeline(query: str) -> list:
         print("[pipeline] No valid reports found.")
         return []
 
-    ranked_results = rank_reports(prepared_reports)
+    ranked_results = rank_reports(prepared_reports, top_k=top_k)
     return ranked_results
 
 
-def pipeline(query: str, top_k: int = 5) -> list[dict]:
+def pipeline(query: str, top_k: int = 10) -> list[dict]:
     """Backward-compatible wrapper around `run_pipeline`."""
-    return run_pipeline(query)[:top_k]
+    return run_pipeline(query, top_k=top_k)
 
 
 def print_results(results: list[dict]) -> None:

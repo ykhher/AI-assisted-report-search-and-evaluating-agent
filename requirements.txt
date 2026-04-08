@@ -1,2 +1,6 @@
 # Core dependency used by `API.py` for optional HTTP-based search requests
 requests==2.32.5
+
+# Lightweight tokenizer/runtime helpers for optional local Qwen support
+protobuf>=6.0.0
+sentencepiece>=0.2.0

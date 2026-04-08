@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from local_qwen import suggest_search_queries
+
 
 def generate_queries(user_input: str) -> list[str]:
-    """Generate a small set of search-friendly query variants for the same topic."""
+    """Generate search-friendly query variants and enrich them with local Qwen when available."""
     topic = " ".join(str(user_input or "").strip().lower().split())
     if not topic:
         return []
@@ -20,11 +22,14 @@ def generate_queries(user_input: str) -> list[str]:
         f"{topic} revenue forecast analysis",
     ]
 
+    llm_queries = suggest_search_queries(topic, max_queries=3)
+
     unique_queries: list[str] = []
     seen: set[str] = set()
-    for query in templates:
-        if query not in seen:
+    for query in [*templates, *llm_queries]:
+        normalized = query.lower().strip()
+        if normalized and normalized not in seen:
             unique_queries.append(query)
-            seen.add(query)
+            seen.add(normalized)
 
     return unique_queries
