@@ -4,3 +4,7 @@ requests==2.32.5
 # Lightweight tokenizer/runtime helpers for optional local Qwen support
 protobuf>=6.0.0
 sentencepiece>=0.2.0
+
+# Optional local Qwen runtime (large install footprint)
+transformers>=4.40.0
+torch>=2.1.0
