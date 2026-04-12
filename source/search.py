@@ -6,10 +6,9 @@ from urllib.parse import urlparse
 
 import re
 
-from API import search_market_reports
-from duplicate import deduplicate
-from parser import parse_search_results
-from query_handler import generate_queries
+from source.API import search_market_reports
+from source.fetching.parser import parse_search_results
+from source.query_handler import generate_queries
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +179,21 @@ def _keyword_overlap_score(result: dict, query: str) -> int:
     return sum(1 for term in query_terms if term in text)
 
 
+def _deduplicate_by_url(results: list[dict]) -> list[dict]:
+    """Keep the first result for each non-empty URL."""
+    seen: set[str] = set()
+    unique: list[dict] = []
+
+    for item in results:
+        url = item.get("url")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        unique.append(item)
+
+    return unique
+
+
 def search_once(query: str, count: int = 10) -> list[dict]:
     """Call the real search API exactly once for a query and return normalized results."""
     expanded_query = expand_query(query)
@@ -188,7 +202,7 @@ def search_once(query: str, count: int = 10) -> list[dict]:
         raw_response = search_market_reports(expanded_query, count=count)
         parsed_results = parse_search_results(raw_response)
         normalized_results = [_normalize_result(item) for item in parsed_results if isinstance(item, dict)]
-        unique_results = deduplicate(normalized_results)
+        unique_results = _deduplicate_by_url(normalized_results)
         unique_results.sort(key=lambda item: _keyword_overlap_score(item, query), reverse=True)
         return unique_results[:count]
     except Exception as exc:
@@ -210,7 +224,7 @@ def search_reports(query: str, count: int = 10, use_api: bool = True) -> list[di
     for search_query in query_variants:
         aggregated_results.extend(_mock_search_reports(search_query, count=count))
 
-    unique_results = deduplicate(aggregated_results)
+    unique_results = _deduplicate_by_url(aggregated_results)
     unique_results.sort(key=lambda item: _keyword_overlap_score(item, query), reverse=True)
 
     focused_results = [item for item in unique_results if _keyword_overlap_score(item, query) > 0]

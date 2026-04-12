@@ -1,4 +1,4 @@
-"""Phase 5 end-to-end pipeline integration for report discovery and ranking."""
+"""End-to-end report search and ranking pipeline."""
 
 from __future__ import annotations
 
@@ -8,8 +8,10 @@ from typing import Any
 
 from extractor import extract_signals, is_report, source_score
 from filter import filter_results
-from scoring import compute_rqi, final_score, generate_reason, rank_reports
+from scoring import compute_relevance_score, compute_rqi, final_score, generate_reason, rank_reports
 from search import expand_query, search_reports
+from source_classifier import classify_source
+from report_classifier import classify_report_type
 
 _YEAR_PATTERN = re.compile(r"\b(?:19|20)\d{2}\b")
 
@@ -28,32 +30,12 @@ def _infer_year(doc: dict[str, Any]) -> int | None:
 
 
 def _get_report_text(doc: dict[str, Any]) -> str:
-    """Fetch or simulate report text from the available search result fields."""
+    """Return text content from a search result."""
     return str(doc.get("text") or doc.get("snippet") or "").strip()
 
 
-def _compute_relevance(query: str, text: str) -> float:
-    """Compute simple keyword-overlap relevance normalized to [0,1]."""
-    generic_terms = {
-        "pdf", "report", "reports", "2024", "2025", "industry", "analysis",
-        "market", "forecast", "outlook", "cagr", "projection", "research",
-    }
-    query_words = {
-        word for word in re.findall(r"[a-z0-9]+", query.lower())
-        if len(word) > 2 and word not in generic_terms
-    }
-    if not query_words:
-        query_words = {word for word in re.findall(r"[a-z0-9]+", query.lower()) if len(word) > 2}
-    if not query_words:
-        return 0.0
-
-    text_words = set(re.findall(r"[a-z0-9]+", text.lower()))
-    overlap = len(query_words & text_words)
-    return round(min(overlap / len(query_words), 1.0), 3)
-
-
-def run_pipeline(query: str, top_k: int = 10) -> list:
-    """Run the full report discovery and credibility ranking pipeline and return the top ranked reports."""
+def run_pipeline(query: str, top_k: int = 10) -> list[dict[str, Any]]:
+    """Run search, filter report-like results, and return ranked items."""
     expanded_query = expand_query(query)
     raw_results = search_reports(query, count=max(20, top_k * 2))
     print(f"[pipeline] Expanded query: {expanded_query}")
@@ -93,7 +75,25 @@ def run_pipeline(query: str, top_k: int = 10) -> list:
         signals = extract_signals(combined_text, metadata)
         signals["source_name"] = str(metadata.get("source", ""))
         signals["source"] = source_score(metadata.get("source", ""), combined_text)
-        relevance = _compute_relevance(query, combined_text)
+
+        source_url = str(doc.get("url", ""))
+        source_result = classify_source(
+            url=source_url,
+            title=doc.get("title", ""),
+            text=text[:500] if text else ""
+        )
+        signals["source_class"] = source_result.get("source_class", "unknown")
+        signals["authority_prior"] = source_result.get("authority_prior", 0.45)
+
+        report_result = classify_report_type(
+            title=doc.get("title", ""),
+            text=text,
+            metadata=metadata
+        )
+        signals["report_type"] = report_result.get("report_type", "unknown")
+        signals["report_validity_score_classifier"] = report_result.get("report_validity_score", 0.0)
+
+        relevance = compute_relevance_score(query, combined_text)
         rqi = compute_rqi(signals)
         score = final_score(relevance, rqi)
         reason = generate_reason(signals)
@@ -116,7 +116,7 @@ def run_pipeline(query: str, top_k: int = 10) -> list:
     return ranked_results
 
 
-def pipeline(query: str, top_k: int = 10) -> list[dict]:
+def pipeline(query: str, top_k: int = 10) -> list[dict[str, Any]]:
     """Backward-compatible wrapper around `run_pipeline`."""
     return run_pipeline(query, top_k=top_k)
 

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Any
 
 
-def rank_results(results: List[Dict[str, Any]], key: str = "score", reverse: bool = True) -> List[Dict[str, Any]]:
+def rank_results(results: list[dict[str, Any]], key: str = "score", reverse: bool = True) -> list[dict[str, Any]]:
     """Sort results by a given key (default: score)."""
     return sorted(results, key=lambda r: r.get(key, 0), reverse=reverse)

@@ -1,141 +1,186 @@
-# LLM-Powered Report Credibility AI Agent
+# Industry Report Ranking Agent
 
 ## Overview
 
-This project is a local Python-based **search-and-evaluation AI agent** for discovering report-like documents, evaluating their credibility, and ranking them using both rule-based signals and a locally hosted LLM.
+This project is a Python agent that finds report-like documents, scores credibility, and returns ranked results with explanations.
 
-The agent combines:
-- API-based search for live retrieval in the main workflow
-- heuristic report detection
-- credibility signal extraction
-- local Qwen-based LLM scoring
-- final ranking and explanation generation
+The system is designed for practical retrieval and ranking. It is not a full fact-checking engine.
 
-## Main Agent Flow
+## What The System Does
+
+For each query, the agent:
+1. rewrites/expands the query (optionally with local Qwen)
+2. retrieves candidates (API-first, with local fallback)
+3. filters non-report or weak candidates
+4. extracts report-quality signals from snippet/full text + metadata
+5. computes component scores and final rank score
+6. returns ranked results and optional exports
+
+## Scope And Non-Goals
+
+In scope:
+- report-style retrieval
+- credibility-oriented scoring
+- explainable ranking output
+
+Out of scope:
+- claim-level fact verification against external sources
+- sentence-level truth labeling
+- legal/compliance-grade auditing
+
+## Current Architecture
+
+Main flow:
 
 ```text
 user query
-→ agent/query rewrite
-→ API search
-→ filter_results / is_report
-→ extract_signals (heuristics + LLM)
-→ compute_rqi
-→ final_score
-→ rank_reports
-→ output
+-> query rewrite / refinement
+-> search (API-first)
+-> filter
+-> optional fetch + parse enrichment
+-> signal extraction
+-> scoring + ranking
+-> structured results / export
 ```
 
-## Project Files
+Agent loop behavior:
+- runs one API retrieval call
+- re-scores cached results across iterations
+- diagnoses failure types and rewrites query when needed
+- stops early when top quality is good enough
 
-- `main.py` — entry point for running the main API-based AI agent
-- `agent.py` — iterative agent loop and search orchestration
-- `local_qwen.py` — local Qwen model loading, prompting, and LLM-based scoring
-- `pipeline.py` — end-to-end system integration
-- `search.py` — query expansion, API retrieval, and fallback search logic
-- `filter.py` — coarse filtering helpers
-- `extractor.py` — credibility signal extraction (heuristics + LLM)
-- `scoring.py` — final RQI scoring, ranking, and explanations
-- `API.py` — HTTP search client used by the main workflow
-- `dataset.json` — sample report metadata
-- `test_dataset_scores.py` — dataset-level scoring utility
+## Repository Layout (Current)
 
-## Requirements
+```text
+agent/
+  main.py
+  local_qwen.py
+  README.md
+  requirements.txt
+  SYSTEM_PROMPT.md
+  source/
+    agent.py
+    main.py
+    pipeline.py
+    search.py
+    API.py
+    filter.py
+    extractor.py
+    scoring.py
+    query_handler.py
+    ranking.py
+    classifier/
+      source_classifier.py
+      report_classifier.py
+    fetching/
+      document_fetcher.py
+      text_parser.py
+      parser.py
+    runtime/
+      evaluate_agent.py
+      iteration_controller.py
+      exporter.py
+      schemas.py
+  data/
+    dataset.json
+    benchmark_queries.csv
+    benchmark_labels.json
+  test/
+    test_dataset_scores.py
+```
 
-- Python 3.10+ recommended
-- Install dependencies with:
+## Key Modules
+
+- `main.py`: root CLI entrypoint, calls `source.agent.agent_pipeline`
+- `source/agent.py`: iterative orchestration, structured output, optional export
+- `source/search.py`: API search + fallback search + URL deduplication
+- `source/extractor.py`: text/metadata signal extraction
+- `source/scoring.py`: component scores and final ranking logic
+- `source/classifier/*`: source authority and report-type classifiers
+- `source/fetching/*`: optional full-text fetch/parse utilities
+- `source/runtime/evaluate_agent.py`: benchmark runner
+- `local_qwen.py`: optional local LLM integration
+
+## Scoring Model
+
+The ranker computes interpretable score components and then combines them:
+
+- `relevance_score`
+- `report_validity_score`
+- `quality_score`
+- `authority_score`
+- `final_score`
+
+### Quality Score Formula
+
+`quality_score` is computed in `source/scoring.py` as:
+
+```text
+quality_score =
+  0.22 * methodology +
+  0.22 * citation +
+  0.18 * consistency +
+  0.14 * structure +
+  0.14 * data_support +
+  0.10 * claim_density
+```
+
+Weights in current scoring logic (`source/scoring.py`):
+
+```text
+final_score =
+  0.40 * relevance_score +
+  0.20 * report_validity_score +
+  0.25 * quality_score +
+  0.15 * authority_score
+```
+
+## Local Qwen (Optional)
+
+Local Qwen is optional. If unavailable, the system still runs with heuristic scoring.
+
+Useful env vars:
+- `USE_LOCAL_QWEN_SIGNALS=0` to disable local LLM scoring
+- `QWEN_MODEL_PATH` to point to a local model directory
+- `QWEN_EXTRA_SITE_PACKAGES` to add external site-packages path
+
+## Installation
+
+Python 3.10+ recommended.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## How to Run
+`requirements.txt` includes:
+- core HTTP dependency (`requests`)
+- tokenizer/runtime helpers (`protobuf`, `sentencepiece`)
+- optional local-LLM runtime (`transformers`, `torch`)
 
-1. Open a terminal in this project folder.
-2. Install dependencies:
+## Run
 
-```bash
-pip install -r requirements.txt
-```
-
-3. Start the main AI agent (uses API search first and returns the top 10 ranked reports):
+Main agent:
 
 ```bash
 python main.py
 ```
 
-4. To score the sample dataset directly:
+You will be prompted for a query and receive ranked JSON output.
+
+## Benchmark Evaluation
+
+Run benchmark with explicit data paths:
 
 ```bash
-python test_dataset_scores.py
+python -m source.runtime.evaluate_agent \
+  --queries data/benchmark_queries.csv \
+  --labels data/benchmark_labels.json \
+  --output outputs/benchmark_results.json \
+  --k 5
 ```
-
-## Scoring Metrics and Formula
-
-The main evaluation score is the **Report Quality Index (RQI)**.
-
-### Core metrics used by the agent
-
-- `methodology` — evidence of survey design, sampling, research process
-- `citation_score` — references, footnotes, source notes, institutional citations
-- `source` — credibility of the named publisher or organization
-- `consistency_score` — whether findings, numbers, and conclusions align coherently
-- `data_density` — amount of quantitative evidence in the text
-- `structure_score` — presence of report-like sections
-- `recency` — preference for more recent material
-- `claim_density` — analytical or forecast-style wording
-
-### Main RQI formula
-
-```text
-RQI =
-    0.12 * methodology +
-    0.20 * citation_score +
-    0.15 * data_component +
-    0.14 * source +
-    0.10 * recency +
-    0.12 * structure_score +
-    0.07 * claim_density +
-    0.10 * consistency_score
-```
-
-The final ranking score is then computed as a blend of:
-- query relevance
-- RQI credibility
-
-## Example Output JSON
-
-```json
-[
-  {
-    "title": "Artificial Intelligence Index Report 2024",
-    "url": "https://hai.stanford.edu/assets/files/hai_ai-index-report-2024-smaller2.pdf",
-    "RQI": 0.84,
-    "score": 0.79,
-    "reason": "contains methodology, strong citation support, high-confidence methodology and citations"
-  },
-  {
-    "title": "The State of AI in Early 2024",
-    "url": "https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai-2024",
-    "RQI": 0.81,
-    "score": 0.76,
-    "reason": "strong citation support, internally consistent analysis, recent publication"
-  }
-]
-```
-
-The main workflow returns the top 10 ranked reports when enough valid candidates are available.
 
 ## Notes
 
-- The project is fully runnable locally.
-- The main workflow is designed to use live API search for retrieval.
-- `API.py` provides the search client used by the main agent flow.
-- The agent is built as an **LLM-assisted search and evaluation AI agent**.
-- A locally downloaded Qwen model is reused for:
-  - search-query rewriting
-  - reference detection
-  - methodology detection
-  - consistency scoring
-  - source credibility estimation
-- The ranking system blends heuristic signals with local LLM judgments for more realistic report evaluation.
-- You can disable local LLM scoring by setting `USE_LOCAL_QWEN_SIGNALS=0` if you want a heuristic-only run.
+- `SYSTEM_PROMPT.md` defines the strict JSON scoring prompt used by local Qwen scoring paths.
+- If API retrieval fails, search falls back to local mock index logic in `source/search.py`.
+- `doc/README_SCOPE.md` now points here; this file is the canonical project description.
