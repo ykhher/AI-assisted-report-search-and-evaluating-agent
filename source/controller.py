@@ -1,8 +1,5 @@
 """Deterministic single-agent controller for report discovery and ranking.
 
-This controller is the first step away from a fixed pipeline and toward an
-explicit agent loop:
-
     plan
     -> choose next action
     -> call tool(s)
@@ -10,35 +7,20 @@ explicit agent loop:
     -> reflect
     -> replan or stop
 
-The control logic is intentionally simple and rule-based. It is designed to be
-easy to inspect, debug, and extend.
-
-Example debug flow:
+Example flow:
     # [controller] step=1 action=search
     # [controller] step=2 action=filter_reports
     # [controller] step=3 action=fetch_top_docs
     # [controller] step=4 action=parse_docs
-    # [controller] step=5 action=classify_candidates
-    # [controller] step=6 action=extract_signals
-    # [controller] step=7 action=score_candidates
-    # [controller] step=8 action=rank_candidates
-    # [controller] step=9 action=reflect
     # [controller] reflection: Step=reflect, usable_candidates=4, avg_final_score=0.671, ...
 """
 
 from __future__ import annotations
 
 import re
-import sys
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Callable
-
-# Allow direct execution with `python source/controller.py`.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+from typing import Any
 
 from source.agent_state import AgentState
 from source.extractor import is_report
@@ -66,23 +48,6 @@ MAX_REPLANS = 2
 DEFAULT_SEARCH_COUNT = 12
 DEFAULT_FETCH_LIMIT = 5
 DEFAULT_VERIFY_TOP_N = 3
-STEP_MAP = {
-    "search": "search",
-    "filter_reports": "filter_reports",
-    "fetch_top_docs": "fetch_top_docs",
-    "parse_docs": "parse_docs",
-    "extract_signals": "extract_signals",
-    "score": "score_candidates",
-    "rank": "rank_candidates",
-    "explain": "reflect",
-    "reflect": "reflect",
-}
-SOURCE_QUERY_TERMS = {
-    "government": "site:.gov",
-    "academic": "site:.edu",
-    "research_institute": "research institute",
-    "consulting": "industry analysis",
-}
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
@@ -99,14 +64,31 @@ def _dedupe_preserve_order(items: list[str]) -> list[str]:
 
 
 def _normalize_plan_steps(plan: dict[str, Any]) -> list[str]:
-    """Translate planner steps into controller actions."""
+    """Translate planner steps into controller actions.
+
+    The planner stays user-facing and broad, while the controller uses a small
+    fixed action vocabulary. This function bridges the two without adding a
+    framework layer.
+    """
+    step_map = {
+        "search": "search",
+        "filter_reports": "filter_reports",
+        "fetch_top_docs": "fetch_top_docs",
+        "parse_docs": "parse_docs",
+        "extract_signals": "extract_signals",
+        "score": "score_candidates",
+        "rank": "rank_candidates",
+        "explain": "reflect",
+        "reflect": "reflect",
+    }
+
     planned_actions: list[str] = []
     for step in plan.get("steps", []):
-        action = STEP_MAP.get(str(step).strip())
+        action = step_map.get(str(step).strip())
         if action and action not in planned_actions:
             planned_actions.append(action)
 
-    # We always classify before scoring.
+    # Classification is useful for scoring but is not yet exposed by planner.
     if "classify_candidates" not in planned_actions:
         insert_at = planned_actions.index("extract_signals") if "extract_signals" in planned_actions else len(planned_actions)
         planned_actions.insert(insert_at, "classify_candidates")
@@ -204,8 +186,14 @@ def _build_search_query(state: AgentState) -> str:
 
     source_preferences = state.current_plan.get("preferred_source_classes", [])
     if isinstance(source_preferences, list):
+        source_terms_map = {
+            "government": "site:.gov",
+            "academic": "site:.edu",
+            "research_institute": "research institute",
+            "consulting": "industry analysis",
+        }
         for item in source_preferences[:2]:
-            mapped = SOURCE_QUERY_TERMS.get(str(item).strip().lower())
+            mapped = source_terms_map.get(str(item).strip().lower())
             if mapped:
                 query_parts.append(mapped)
 
@@ -343,7 +331,13 @@ def revise_plan(state: AgentState, failure_type: str | None) -> dict[str, Any]:
 
 
 def choose_next_action(state: AgentState) -> str | None:
-    """Choose the next controller action."""
+    """Choose the next deterministic controller action.
+
+    Rules:
+    - start with the normalized planner steps
+    - after reflection, either stop or replan
+    - after replan, restart from search
+    """
     if state.stop_reason:
         return None
 
@@ -386,7 +380,12 @@ def apply_action(
     tool_registry: dict[str, Any] | None = None,
     runtime_context: dict[str, Any] | None = None,
 ) -> None:
-    """Apply one action and update state in place."""
+    """Apply one controller action and update state in place.
+
+    The runtime context stores transient outputs like ranked results. This
+    keeps `AgentState` focused on durable execution state rather than every
+    derived artifact.
+    """
     tools = tool_registry or get_tool_registry()
     context = runtime_context if runtime_context is not None else {}
     state.current_step = action_name
@@ -429,7 +428,6 @@ def apply_action(
                 "source": payload.get("source", candidate.source),
                 "year": _infer_year(payload),
             }
-            # This quick gate keeps blog-like pages out of later steps.
             report_type_info = tools["classify_report_type"](
                 title=str(payload.get("title", candidate.title)),
                 text=text,
@@ -557,7 +555,6 @@ def apply_action(
                 "year": _infer_year(payload),
             }
             signals = tools["extract_signals"](text, metadata)
-            # Keep the text here because later steps reuse it.
             signals["_text"] = f"{payload.get('title', candidate.title)} {text}".strip()
             signals["source_name"] = str(payload.get("source", candidate.source))
             signals["source_class"] = payload.get("source_class", "unknown")
@@ -695,12 +692,8 @@ def apply_action(
         )
         return
 
-    additional_actions: dict[str, Callable[[AgentState, dict[str, Any], dict[str, Any]], None]] = {}
-    action_handler = additional_actions.get(action_name)
-    if action_handler is not None:
-        action_handler(state, tools, context)
-        return
-
+    # TODO: Add more actions here if the controller grows beyond the first
+    # deterministic loop. For now, unknown actions should fail loudly.
     raise ValueError(f"Unknown controller action: {action_name}")
 
 
@@ -712,15 +705,7 @@ def run_agent(
     verbose: bool = True,
     verify_top_n: int = DEFAULT_VERIFY_TOP_N,
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    """Run the deterministic single-agent loop for one user query.
-
-    Returns either:
-    - ranked result list, or
-    - a richer dictionary with ranked results and serialized state
-
-    The controller avoids hidden behavior. Every step is chosen explicitly and
-    recorded into `AgentState.action_history`.
-    """
+    """Run the deterministic single-agent loop for one user query."""
     started_at = time.perf_counter()
     tools = tool_registry or get_tool_registry()
 
