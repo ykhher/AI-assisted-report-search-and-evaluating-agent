@@ -28,7 +28,6 @@ The current flow looks like this:
 ```text
 User query
 -> planner
--> agent state
 -> controller loop
 -> tool selection
 -> search / fetch / parse / classify / score / rank
