@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import os
 import re
@@ -10,6 +11,19 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    """Read a boolean-like environment flag."""
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _local_qwen_enabled() -> bool:
+    """Return True only when local Qwen use is explicitly enabled."""
+    return _env_flag("USE_LOCAL_QWEN", default=False)
 
 
 def _unique_paths(paths: list[Path]) -> list[Path]:
@@ -118,10 +132,12 @@ def _ensure_ml_stack() -> tuple[Any, Any, Any] | None:
 
 def get_local_qwen_status() -> dict[str, Any]:
     """Return whether local Qwen support is discoverable on this machine."""
+    enabled = _local_qwen_enabled()
     model_path = next(iter(_candidate_model_paths()), None)
-    ml_stack = _ensure_ml_stack()
+    ml_stack = _ensure_ml_stack() if enabled else None
     return {
-        "available": bool(model_path and ml_stack),
+        "enabled": enabled,
+        "available": bool(enabled and model_path and ml_stack),
         "model_path": str(model_path) if model_path else None,
         "borrowed_site_packages": [str(path) for path in _candidate_site_packages()],
     }
@@ -130,6 +146,9 @@ def get_local_qwen_status() -> dict[str, Any]:
 @lru_cache(maxsize=1)
 def _load_model() -> tuple[Any, Any, Any] | None:
     """Load the local Qwen model lazily and keep it cached for reuse."""
+    if not _local_qwen_enabled():
+        return None
+
     ml_stack = _ensure_ml_stack()
     model_path = next(iter(_candidate_model_paths()), None)
     if not ml_stack or model_path is None:
@@ -186,11 +205,22 @@ def _generate(
         )
 
     inputs = tokenizer(rendered_prompt, return_tensors="pt", truncation=True, max_length=2048)
+    generation_config = getattr(model, "generation_config", None)
+    if generation_config is not None:
+        generation_config = copy.deepcopy(generation_config)
+        generation_config.do_sample = False
+        # Some local Qwen configs carry sampling flags by default.
+        # When we run deterministic generation, clearing them avoids
+        # noisy Transformers warnings about ignored settings.
+        generation_config.temperature = None
+        generation_config.top_p = None
+        generation_config.top_k = None
 
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
+            generation_config=generation_config,
             do_sample=False,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
@@ -309,7 +339,10 @@ def assess_text_signals(text: str, source: str = "") -> dict[str, Any]:
         "reason": "",
     }
 
-    if os.environ.get("USE_LOCAL_QWEN_SIGNALS", "1").strip().lower() in {"0", "false", "no"}:
+    if not _local_qwen_enabled():
+        return default
+
+    if not _env_flag("USE_LOCAL_QWEN_SIGNALS", default=True):
         return default
 
     excerpt = _prepare_signal_excerpt(text)
@@ -372,6 +405,9 @@ def assess_text_signals(text: str, source: str = "") -> dict[str, Any]:
 
 def suggest_search_queries(user_input: str, max_queries: int = 3) -> list[str]:
     """Generate a few better search queries using the local Qwen model when available."""
+    if not _local_qwen_enabled():
+        return []
+
     topic = " ".join(str(user_input or "").strip().split())
     if not topic:
         return []

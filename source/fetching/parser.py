@@ -3,34 +3,35 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 
 _YEAR_PATTERN = re.compile(r"\b(?:19|20)\d{2}\b")
 
 
-def parse_search_results(raw_data: Any) -> List[Dict[str, Any]]:
-    """Convert raw API responses into a list of normalized result dictionaries."""
+def _extract_hits(raw_data: Any) -> list[dict[str, Any]]:
+    """Extract a list of result dictionaries from common API response shapes."""
     if isinstance(raw_data, list):
-        hits = raw_data
-    elif isinstance(raw_data, dict):
-        hits = (
-            raw_data.get("organic_results")
-            or raw_data.get("hits")
-            or raw_data.get("results")
-            or raw_data.get("documents")
-            or raw_data.get("data")
-            or raw_data.get("webPages", {}).get("value")
-            or []
-        )
-    else:
-        hits = []
+        return [item for item in raw_data if isinstance(item, dict)]
+    if not isinstance(raw_data, dict):
+        return []
 
-    results: List[Dict[str, Any]] = []
-    for item in hits:
-        if not isinstance(item, dict):
-            continue
+    hits = (
+        raw_data.get("organic_results")
+        or raw_data.get("hits")
+        or raw_data.get("results")
+        or raw_data.get("documents")
+        or raw_data.get("data")
+        or raw_data.get("webPages", {}).get("value")
+        or []
+    )
+    return [item for item in hits if isinstance(item, dict)]
 
+
+def parse_search_results(raw_data: Any) -> list[dict[str, Any]]:
+    """Convert raw API responses into a list of normalized result dictionaries."""
+    results: list[dict[str, Any]] = []
+    for item in _extract_hits(raw_data):
         date_text = str(item.get("date") or "")
         year_match = _YEAR_PATTERN.search(date_text)
 

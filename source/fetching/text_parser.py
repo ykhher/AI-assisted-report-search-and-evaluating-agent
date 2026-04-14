@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable
 
 SECTION_KEYS: tuple[str, ...] = (
     "summary",
@@ -61,6 +60,12 @@ STATISTICAL_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(?:cagr|forecast|projection|growth rate|index)\b", re.IGNORECASE),
 )
 
+HEADER_ALIASES: tuple[tuple[str, str], ...] = tuple(
+    (alias, canonical)
+    for canonical, aliases in SECTION_HEADER_ALIASES.items()
+    for alias in aliases
+)
+
 
 def clean_text(raw_text: str) -> str:
     """Normalize raw text while keeping paragraph breaks."""
@@ -73,13 +78,6 @@ def clean_text(raw_text: str) -> str:
     text = "\n".join(lines)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
-
-
-def _all_header_aliases() -> Iterable[tuple[str, str]]:
-    """Yield pairs of (alias, canonical_key) for all configured section aliases."""
-    for canonical, aliases in SECTION_HEADER_ALIASES.items():
-        for alias in aliases:
-            yield alias, canonical
 
 
 def _is_header_candidate(line: str) -> bool:
@@ -105,11 +103,11 @@ def detect_section_header(line: str) -> str | None:
     normalized = re.sub(r"^\s*\d+(?:[.)]|\s+-)\s*", "", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
 
-    for alias, canonical in _all_header_aliases():
+    for alias, canonical in HEADER_ALIASES:
         if normalized == alias:
             return canonical
 
-    for alias, canonical in _all_header_aliases():
+    for alias, canonical in HEADER_ALIASES:
         if normalized.startswith(alias + " "):
             return canonical
 
@@ -148,7 +146,7 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text))
 
 
-def parse_report_text(raw_text: str) -> dict:
+def parse_report_text(raw_text: str) -> dict[str, object]:
     """Return cleaned text, parsed sections, and lightweight stats."""
     cleaned = clean_text(raw_text)
     sections = split_into_sections(cleaned)

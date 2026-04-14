@@ -11,6 +11,15 @@ from urllib.parse import urlparse
 import requests
 
 
+DEFAULT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0 Safari/537.36"
+    )
+}
+
+
 class _HTMLTextParser(HTMLParser):
     """Lightweight HTML-to-text parser."""
 
@@ -103,6 +112,18 @@ def fetch_html_text(content: bytes, encoding_hint: str | None = None) -> dict[st
     }
 
 
+def _base_result(url: str) -> dict[str, Any]:
+    """Build the standard fetch result shape."""
+    return {
+        "url": url,
+        "status": "failed",
+        "content_type": "unknown",
+        "title": "",
+        "raw_text": "",
+        "error": "",
+    }
+
+
 def fetch_pdf_text(content: bytes) -> dict[str, str]:
     """Extract text from PDF bytes using pypdf when available."""
     try:
@@ -144,14 +165,7 @@ def fetch_pdf_text(content: bytes) -> dict[str, str]:
 
 def fetch_document(url: str, timeout: int = 15) -> dict[str, Any]:
     """Fetch a URL and return normalized text extraction output."""
-    result: dict[str, Any] = {
-        "url": url,
-        "status": "failed",
-        "content_type": "unknown",
-        "title": "",
-        "raw_text": "",
-        "error": "",
-    }
+    result = _base_result(url)
 
     if not isinstance(url, str) or not url.strip():
         result["error"] = "invalid_url"
@@ -161,13 +175,7 @@ def fetch_document(url: str, timeout: int = 15) -> dict[str, Any]:
         response = requests.get(
             url,
             timeout=timeout,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/123.0 Safari/537.36"
-                )
-            },
+            headers=DEFAULT_HEADERS,
         )
         response.raise_for_status()
     except requests.RequestException as exc:
@@ -189,10 +197,7 @@ def fetch_document(url: str, timeout: int = 15) -> dict[str, Any]:
         parsed = fetch_pdf_text(content)
         result["title"] = parsed.get("title", "")
         result["raw_text"] = parsed.get("raw_text", "")
-        parse_error = parsed.get("error", "")
-        if parse_error:
-            result["error"] = parse_error
-            # Download succeeded, but parser could not extract full text.
+        result["error"] = parsed.get("error", "")
         result["status"] = "ok"
         return result
 
@@ -202,7 +207,7 @@ def fetch_document(url: str, timeout: int = 15) -> dict[str, Any]:
     except Exception:
         fallback_text = ""
 
-    result["raw_text"] = fallback_text
     result["status"] = "ok"
+    result["raw_text"] = fallback_text
     result["error"] = "unknown_content_type"
     return result

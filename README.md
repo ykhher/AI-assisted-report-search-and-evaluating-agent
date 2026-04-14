@@ -1,73 +1,115 @@
-# Industry Report Ranking Agent
+# Industry Report Discovery Agent
 
-## Overview
+This project is a Python agent for finding industry reports, filtering out weak or non-report results, scoring report quality, and returning a ranked list with short explanations.
 
-This project is a Python agent that finds report-like documents, scores credibility, and returns ranked results with explanations.
+The code started as a retrieval-and-ranking pipeline and has gradually moved toward a more explicit agent structure. Today, the system uses a simple controller loop that plans, searches, filters, fetches, scores, reflects, and can replan when results look weak.
 
-The system is designed for practical retrieval and ranking. It is not a full fact-checking engine.
+It is built for practical report discovery and evaluation. It is not a full fact-checking system, and it should not be treated as one.
 
-## What The System Does
+## What it does
 
-For each query, the agent:
-1. rewrites/expands the query (optionally with local Qwen)
-2. retrieves candidates (API-first, with local fallback)
-3. filters non-report or weak candidates
-4. extracts report-quality signals from snippet/full text + metadata
-5. computes component scores and final rank score
-6. returns ranked results and optional exports
+Given a query like `"enterprise AI adoption report 2025"`, the agent will:
 
-## Scope And Non-Goals
+- interpret the request into a small structured plan
+- search for candidate documents
+- filter out pages that do not look report-like
+- optionally fetch and parse fuller document text
+- classify the source and report type
+- extract quality and credibility signals
+- score and rank the best candidates
+- optionally attach lightweight verification notes to the top few results
 
-In scope:
-- report-style retrieval
-- credibility-oriented scoring
-- explainable ranking output
+The verification step is intentionally modest. It only adds internal evidence notes such as whether a claim looks measurable or appears methodology-dependent. It does not verify claims against outside sources.
 
-Out of scope:
-- claim-level fact verification against external sources
-- sentence-level truth labeling
-- legal/compliance-grade auditing
+## How the system is organized
 
-## Current Architecture
-
-Main flow:
+The current flow looks like this:
 
 ```text
-user query
--> query rewrite / refinement
--> search (API-first)
--> filter
--> optional fetch + parse enrichment
--> signal extraction
--> scoring + ranking
--> structured results / export
+User query
+-> planner
+-> agent state
+-> controller loop
+-> tool selection
+-> search / fetch / parse / classify / score / rank
+-> reflection
+-> optional replanning
+-> final ranked results
 ```
 
-Agent loop behavior:
-- runs one API retrieval call
-- re-scores cached results across iterations
-- diagnoses failure types and rewrites query when needed
-- stops early when top quality is good enough
+The important thing to know is that the older pipeline logic still exists, but the newer controller-oriented path is now the main way the project runs.
 
-## Repository Layout (Current)
+## Step-by-step workflow
+
+Step 1. User query -> structured task plan  
+File: `planner.py`
+
+Step 2. Agent controller initializes state and action loop  
+File: `controller.py`
+
+Step 3. Expand query into search-friendly variants  
+Files: `query_handler.py`, `search.py`
+
+Step 4. Retrieve candidate reports from API or fallback search  
+File: `search.py`
+
+Step 5. Normalize and coarsely filter raw search results  
+Files: raw search parser, `filter.py`
+
+Step 6. Fetch full document content for top candidates  
+File: `document_fetcher.py`
+
+Step 7. Parse document text into sections and lightweight stats  
+File: `text_parser.py`
+
+Step 8. Classify document type and source authority class  
+Files: `report_classifier.py`, `source_classifier.py`
+
+Step 9. Extract credibility and analytical quality signals  
+File: `extractor.py`
+
+Step 10. Compute interpretable sub-scores and final ranking score  
+File: `scoring.py`
+
+Step 11. Rank candidate reports  
+File: `scoring.py`
+
+Step 12. Run post-ranking claim extraction and lightweight verification  
+File: `verification.py`
+
+Step 13. Reflect on progress and diagnose failure modes  
+File: `reflection.py`
+
+Step 14. If needed, rewrite query and replan  
+Files: `iteration_controller.py`, `controller.py`
+
+Step 15. Return final ranked results  
+Files: `agent.py`, `tool_registry.py`, `pipeline.py`
+
+## Project layout
 
 ```text
 agent/
   main.py
-  local_qwen.py
   README.md
   requirements.txt
-  SYSTEM_PROMPT.md
+  local_qwen.py
   source/
-    agent.py
     main.py
-    pipeline.py
+    agent.py
+    controller.py
+    planner.py
+    agent_state.py
+    tool_registry.py
+    reflection.py
+    verification.py
     search.py
     API.py
     filter.py
     extractor.py
     scoring.py
     query_handler.py
+    pipeline.py
     ranking.py
     classifier/
       source_classifier.py
@@ -85,47 +127,59 @@ agent/
     dataset.json
     benchmark_queries.csv
     benchmark_labels.json
-  test/
-    test_dataset_scores.py
 ```
 
-## Key Modules
+## Main modules
 
-- `main.py`: root CLI entrypoint, calls `source.agent.agent_pipeline`
-- `source/agent.py`: iterative orchestration, structured output, optional export
-- `source/search.py`: API search + fallback search + URL deduplication
-- `source/extractor.py`: text/metadata signal extraction
-- `source/scoring.py`: component scores and final ranking logic
-- `source/classifier/*`: source authority and report-type classifiers
-- `source/fetching/*`: optional full-text fetch/parse utilities
-- `source/runtime/evaluate_agent.py`: benchmark runner
-- `local_qwen.py`: optional local LLM integration
+- `main.py`
+  Repo-root entrypoint. This is the easiest way to run the project from the command line.
 
-## Scoring Model
+- `source/main.py`
+  CLI wrapper around the controller-based agent path.
 
-The ranker computes interpretable score components and then combines them:
+- `source/controller.py`
+  The main control loop. It chooses actions, runs tools, updates state, reflects on progress, and replans when needed.
+
+- `source/planner.py`
+  Turns a raw query into a lightweight structured plan.
+
+- `source/agent_state.py`
+  Holds working memory for one run, including candidates, failed URLs, reflections, and action history.
+
+- `source/tool_registry.py`
+  Exposes the core retrieval, parsing, classification, scoring, and ranking functions as named tools.
+
+- `source/reflection.py`
+  Diagnoses weak progress and tells the controller whether it should stop or replan.
+
+- `source/search.py`
+  Handles live search plus a local fallback index when live retrieval is unavailable.
+
+- `source/extractor.py`
+  Extracts credibility and report-quality signals from text and metadata.
+
+- `source/scoring.py`
+  Computes component scores and the final rank score.
+
+- `source/fetching/*`
+  Fetches document content and parses simple structure from text.
+
+- `source/classifier/*`
+  Classifies source authority and document type.
+
+- `source/runtime/evaluate_agent.py`
+  Runs a lightweight benchmark against labeled query data.
+
+## Scoring approach
+
+The ranker uses four interpretable components:
 
 - `relevance_score`
 - `report_validity_score`
 - `quality_score`
 - `authority_score`
-- `final_score`
 
-### Quality Score Formula
-
-`quality_score` is computed in `source/scoring.py` as:
-
-```text
-quality_score =
-  0.22 * methodology +
-  0.22 * citation +
-  0.18 * consistency +
-  0.14 * structure +
-  0.14 * data_support +
-  0.10 * claim_density
-```
-
-Weights in current scoring logic (`source/scoring.py`):
+These are combined into the final score in `source/scoring.py`:
 
 ```text
 final_score =
@@ -135,41 +189,93 @@ final_score =
   0.15 * authority_score
 ```
 
-## Local Qwen (Optional)
-
-Local Qwen is optional. If unavailable, the system still runs with heuristic scoring.
-
-Useful env vars:
-- `USE_LOCAL_QWEN_SIGNALS=0` to disable local LLM scoring
-- `QWEN_MODEL_PATH` to point to a local model directory
-- `QWEN_EXTRA_SITE_PACKAGES` to add external site-packages path
+There is also a compatibility `RQI` field in some parts of the codebase, but the main ranking path now relies on the fuller structured score.
 
 ## Installation
 
-Python 3.10+ recommended.
+Python 3.10+ is recommended.
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-`requirements.txt` includes:
-- core HTTP dependency (`requests`)
-- tokenizer/runtime helpers (`protobuf`, `sentencepiece`)
-- optional local-LLM runtime (`transformers`, `torch`)
+## Configuration
 
-## Run
+### Search API
 
-Main agent:
+If you want live web retrieval, set one of these environment variables:
+
+```bash
+SEARCHAPI_API_KEY=...
+```
+
+or
+
+```bash
+YDC_API_KEY=...
+```
+
+If no API key is available, the project can still run using the local mock fallback inside `source/search.py`.
+
+### Local Qwen
+
+Local Qwen support is optional and is now off by default to keep runs faster. If you want to enable it, set `USE_LOCAL_QWEN=1`. If it is unavailable, the project still works with heuristic logic.
+
+Useful environment variables:
+
+- `USE_LOCAL_QWEN=1`
+- `USE_LOCAL_QWEN_SIGNALS=0`
+- `QWEN_MODEL_PATH=...`
+- `QWEN_EXTRA_SITE_PACKAGES=...`
+
+## Running the agent
+
+The simplest way to run it:
+
+```bash
+python main.py "enterprise AI adoption report 2025"
+```
+
+You can also run it interactively:
 
 ```bash
 python main.py
 ```
 
-You will be prompted for a query and receive ranked JSON output.
+Useful options:
 
-## Benchmark Evaluation
+```bash
+python main.py "enterprise AI adoption report 2025" --debug
+python main.py "enterprise AI adoption report 2025" --json
+python main.py "enterprise AI adoption report 2025" --quiet
+python main.py "enterprise AI adoption report 2025" --verify-top-n 2
+```
 
-Run benchmark with explicit data paths:
+## Example output
+
+Readable CLI output looks like this:
+
+```text
+Query: enterprise AI adoption report 2025
+Stop reason: sufficient_quality
+Processing time: 1842.317 ms
+
+Top Ranked Reports
+--------------------------------------------------------------------------------
+1. Enterprise AI Adoption Benchmark 2025
+   score=0.781  type=benchmark  source=mckinsey.com
+   why: contains methodology, strong citation support, internally consistent analysis
+   verify: medium confidence - Adoption is expected to reach 68% by 2025.
+   url: https://example.com/enterprise-ai-benchmark-2025.pdf
+```
+
+If you pass `--json`, the CLI prints the fuller structured payload, including plan and state details when `--debug` is enabled.
+
+## Benchmark evaluation
+
+You can run the lightweight benchmark like this:
 
 ```bash
 python -m source.runtime.evaluate_agent \
@@ -179,8 +285,18 @@ python -m source.runtime.evaluate_agent \
   --k 5
 ```
 
+## What this project is not
+
+This project is not:
+
+- a full external-source fact-checking engine
+- a legal or compliance review tool
+- a general-purpose research assistant
+
+It is best understood as a practical report discovery and ranking agent with explainable heuristics and a small amount of optional local-model support.
+
 ## Notes
 
-- `SYSTEM_PROMPT.md` defines the strict JSON scoring prompt used by local Qwen scoring paths.
-- If API retrieval fails, search falls back to local mock index logic in `source/search.py`.
-- `doc/README_SCOPE.md` now points here; this file is the canonical project description.
+- The controller-first path is the main execution path now.
+- The older pipeline entrypoints are still kept around for compatibility.
+- Some modules still carry compatibility wrappers from earlier versions of the project. That is deliberate and helps keep the system stable while the architecture evolves.

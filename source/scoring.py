@@ -13,9 +13,16 @@ It also keeps backward-compatible helpers used by the existing pipeline.
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 from typing import Any, Mapping
 
-from extractor import bottom_reference_score, footnote_score, institution_score
+# Allow direct execution with `python source/scoring.py`.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from source.extractor import bottom_reference_score, footnote_score, institution_score
 from local_qwen import assess_text_signals
 
 _SECTION_KEYWORDS = ("introduction", "methodology", "results", "conclusion")

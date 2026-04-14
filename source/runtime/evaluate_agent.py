@@ -5,12 +5,19 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from agent import agent_pipeline
+# Allow `python source/runtime/evaluate_agent.py` to work by ensuring the
+# project root is available on sys.path.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from source.agent import agent_pipeline
 
 
 @dataclass
@@ -48,6 +55,17 @@ def _to_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _read_score(report: dict[str, Any], score_key: str) -> float:
+    """Read a score from the report or its score breakdown."""
+    score = _to_float(report.get(score_key))
+    if score > 0.0:
+        return score
+    breakdown = report.get("score_breakdown")
+    if isinstance(breakdown, dict):
+        return _to_float(breakdown.get(score_key))
+    return 0.0
 
 
 def call_main_agent(query: str, k: int) -> Any:
@@ -200,26 +218,9 @@ def evaluate_query(query_obj: BenchmarkQuery, label: dict[str, Any], k: int) -> 
     authority_weighted_hits: list[float] = []
 
     for idx, report in enumerate(results):
-        validity = _to_float(report.get("report_validity_score"))
-        if validity <= 0.0:
-            breakdown = report.get("score_breakdown")
-            if isinstance(breakdown, dict):
-                validity = _to_float(breakdown.get("report_validity_score"))
-        validity_values.append(validity)
-
-        quality = _to_float(report.get("quality_score"))
-        if quality <= 0.0:
-            breakdown = report.get("score_breakdown")
-            if isinstance(breakdown, dict):
-                quality = _to_float(breakdown.get("quality_score"))
-        quality_values.append(quality)
-
-        authority = _to_float(report.get("authority_score"))
-        if authority <= 0.0:
-            breakdown = report.get("score_breakdown")
-            if isinstance(breakdown, dict):
-                authority = _to_float(breakdown.get("authority_score"))
-        authority_weighted_hits.append(authority * useful_flags[idx])
+        validity_values.append(_read_score(report, "report_validity_score"))
+        quality_values.append(_read_score(report, "quality_score"))
+        authority_weighted_hits.append(_read_score(report, "authority_score") * useful_flags[idx])
 
     denom = float(k)
     precision_at_k = useful_count / denom
