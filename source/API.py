@@ -1,4 +1,4 @@
-"""Small wrapper around the live search API used by the agent."""
+﻿"""Small wrapper around the live search API used by the agent."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ import requests
 
 
 DEFAULT_API_URL = "https://www.searchapi.io/api/v1/search"
-# Local fallback for demos or quick testing.
-# Prefer environment variables in real use.
 DEFAULT_API_KEY = "rLsVnoA7RPQpW6YLfHuU3FXi"
 
 

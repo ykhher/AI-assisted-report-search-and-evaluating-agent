@@ -1,10 +1,10 @@
 # Industry Report Discovery Agent
 
-This project is a Python agent for finding industry reports, filtering out weak or non-report results, scoring report quality, and returning a ranked list with short explanations.
+This project is a agent for finding industry reports, filtering out weak or non-report results, scoring report quality, and returning a ranked list with short explanations.
 
-The code started as a retrieval-and-ranking pipeline and has gradually moved toward a more explicit agent structure. Today, the system uses a simple controller loop that plans, searches, filters, fetches, scores, reflects, and can replan when results look weak.
+The code started as a retrieval-and-ranking pipeline and has gradually moved toward a more explicit agent structure. 
 
-It is built for practical report discovery and evaluation. It is not a full fact-checking system, and it should not be treated as one.
+It is built for practical report discovery and evaluation.
 
 ## What it does
 
@@ -36,8 +36,6 @@ User query
 -> optional replanning
 -> final ranked results
 ```
-
-The important thing to know is that the older pipeline logic still exists, but the newer controller-oriented path is now the main way the project runs.
 
 ## Step-by-step workflow
 
@@ -129,47 +127,6 @@ agent/
     benchmark_labels.json
 ```
 
-## Main modules
-
-- `main.py`
-  Repo-root entrypoint. This is the easiest way to run the project from the command line.
-
-- `source/main.py`
-  CLI wrapper around the controller-based agent path.
-
-- `source/controller.py`
-  The main control loop. It chooses actions, runs tools, updates state, reflects on progress, and replans when needed.
-
-- `source/planner.py`
-  Turns a raw query into a lightweight structured plan.
-
-- `source/agent_state.py`
-  Holds working memory for one run, including candidates, failed URLs, reflections, and action history.
-
-- `source/tool_registry.py`
-  Exposes the core retrieval, parsing, classification, scoring, and ranking functions as named tools.
-
-- `source/reflection.py`
-  Diagnoses weak progress and tells the controller whether it should stop or replan.
-
-- `source/search.py`
-  Handles live search plus a local fallback index when live retrieval is unavailable.
-
-- `source/extractor.py`
-  Extracts credibility and report-quality signals from text and metadata.
-
-- `source/scoring.py`
-  Computes component scores and the final rank score.
-
-- `source/fetching/*`
-  Fetches document content and parses simple structure from text.
-
-- `source/classifier/*`
-  Classifies source authority and document type.
-
-- `source/runtime/evaluate_agent.py`
-  Runs a lightweight benchmark against labeled query data.
-
 ## Scoring approach
 
 The ranker uses four interpretable components:
@@ -201,58 +158,6 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## Configuration
-
-### Search API
-
-If you want live web retrieval, set one of these environment variables:
-
-```bash
-SEARCHAPI_API_KEY=...
-```
-
-or
-
-```bash
-YDC_API_KEY=...
-```
-
-If no API key is available, the project can still run using the local mock fallback inside `source/search.py`.
-
-### Local Qwen
-
-Local Qwen support is optional and is now off by default to keep runs faster. If you want to enable it, set `USE_LOCAL_QWEN=1`. If it is unavailable, the project still works with heuristic logic.
-
-Useful environment variables:
-
-- `USE_LOCAL_QWEN=1`
-- `USE_LOCAL_QWEN_SIGNALS=0`
-- `QWEN_MODEL_PATH=...`
-- `QWEN_EXTRA_SITE_PACKAGES=...`
-
-## Running the agent
-
-The simplest way to run it:
-
-```bash
-python main.py "enterprise AI adoption report 2025"
-```
-
-You can also run it interactively:
-
-```bash
-python main.py
-```
-
-Useful options:
-
-```bash
-python main.py "enterprise AI adoption report 2025" --debug
-python main.py "enterprise AI adoption report 2025" --json
-python main.py "enterprise AI adoption report 2025" --quiet
-python main.py "enterprise AI adoption report 2025" --verify-top-n 2
-```
-
 ## Example output
 
 Readable CLI output looks like this:
@@ -271,8 +176,6 @@ Top Ranked Reports
    url: https://example.com/enterprise-ai-benchmark-2025.pdf
 ```
 
-If you pass `--json`, the CLI prints the fuller structured payload, including plan and state details when `--debug` is enabled.
-
 ## Benchmark evaluation
 
 You can run the lightweight benchmark like this:
@@ -284,19 +187,3 @@ python -m source.runtime.evaluate_agent \
   --output outputs/benchmark_results.json \
   --k 5
 ```
-
-## What this project is not
-
-This project is not:
-
-- a full external-source fact-checking engine
-- a legal or compliance review tool
-- a general-purpose research assistant
-
-It is best understood as a practical report discovery and ranking agent with explainable heuristics and a small amount of optional local-model support.
-
-## Notes
-
-- The controller-first path is the main execution path now.
-- The older pipeline entrypoints are still kept around for compatibility.
-- Some modules still carry compatibility wrappers from earlier versions of the project. That is deliberate and helps keep the system stable while the architecture evolves.
