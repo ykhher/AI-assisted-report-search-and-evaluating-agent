@@ -1,31 +1,41 @@
-"""Search module with API-backed retrieval and safe local fallback."""
+"""Search helpers with API-backed retrieval and safe local fallback."""
 
 from __future__ import annotations
 
+import re
+import sys
+from pathlib import Path
 from urllib.parse import urlparse
 
-import re
+# Allow direct execution with `python source/search.py`.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from source.API import search_market_reports
 from source.fetching.parser import parse_search_results
 from source.query_handler import generate_queries
 
 
-# ---------------------------------------------------------------------------
-# Query expansion
-# ---------------------------------------------------------------------------
-
-def expand_query(query: str) -> str:
-    """Append standard suffixes to bias search results toward formal reports."""
-    base_query = str(query or "").strip()
-    required_terms = ["pdf", "report", "2024", "industry", "analysis"]
-    missing_terms = [term for term in required_terms if term not in base_query.lower()]
-    return f"{base_query} {' '.join(missing_terms)}".strip()
-
-
-# ---------------------------------------------------------------------------
-# Mock search backend (fallback when API is unavailable)
-# ---------------------------------------------------------------------------
+REQUIRED_QUERY_TERMS = ["pdf", "report", "2024", "industry", "analysis"]
+GENERIC_QUERY_TERMS = {
+    "pdf",
+    "report",
+    "reports",
+    "2024",
+    "2025",
+    "industry",
+    "analysis",
+    "market",
+    "forecast",
+    "outlook",
+    "cagr",
+    "projection",
+    "research",
+    "size",
+    "revenue",
+    "filetype",
+}
 
 _MOCK_INDEX = [
     {
@@ -125,11 +135,17 @@ _MOCK_INDEX = [
 ]
 
 
+def expand_query(query: str) -> str:
+    """Append standard report-oriented suffixes to a user query."""
+    base_query = " ".join(str(query or "").strip().split())
+    missing_terms = [term for term in REQUIRED_QUERY_TERMS if term not in base_query.lower()]
+    return f"{base_query} {' '.join(missing_terms)}".strip()
+
+
 def _normalize_result(item: dict) -> dict:
-    """Normalize raw API items to the internal search result schema."""
+    """Normalize one raw search result to the internal schema."""
     url = str(item.get("url") or "")
     source = item.get("source") or item.get("domain") or urlparse(url).netloc
-
     return {
         "title": item.get("title") or item.get("name") or "Untitled result",
         "url": url,
@@ -141,40 +157,16 @@ def _normalize_result(item: dict) -> dict:
     }
 
 
-def _topic_terms(query: str) -> set[str]:
-    """Extract the user-specific query words and ignore generic search boilerplate."""
-    generic_terms = {
-        "pdf", "report", "reports", "2024", "2025", "industry", "analysis",
-        "market", "forecast", "outlook", "cagr", "projection", "research",
-        "size", "revenue", "filetype",
-    }
-    terms = {
-        term for term in re.findall(r"[a-z0-9]+", str(query).lower())
-        if len(term) > 2 and term not in generic_terms
-    }
-    return terms or {
-        term for term in re.findall(r"[a-z0-9]+", str(query).lower()) if len(term) > 2
-    }
-
-
-def _mock_search_reports(query: str, count: int = 10) -> list[dict]:
-    """Local keyword-overlap fallback used when the API is unavailable."""
-    keywords = _topic_terms(query)
-    scored = []
-
-    for doc in _MOCK_INDEX:
-        doc_text = f"{doc['title']} {doc['snippet']}".lower()
-        overlap = sum(1 for kw in keywords if kw in doc_text)
-        if overlap > 0:
-            scored.append((overlap, doc))
-
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [doc for _, doc in scored[:count]]
+def _query_terms(query: str) -> set[str]:
+    """Extract user-topic words while ignoring generic search boilerplate."""
+    words = {word for word in re.findall(r"[a-z0-9]+", str(query).lower()) if len(word) > 2}
+    focused_words = {word for word in words if word not in GENERIC_QUERY_TERMS}
+    return focused_words or words
 
 
 def _keyword_overlap_score(result: dict, query: str) -> int:
     """Score a result by topic-word overlap for stable local ranking."""
-    query_terms = _topic_terms(query)
+    query_terms = _query_terms(query)
     text = f"{result.get('title', '')} {result.get('snippet', '')}".lower()
     return sum(1 for term in query_terms if term in text)
 
@@ -182,36 +174,57 @@ def _keyword_overlap_score(result: dict, query: str) -> int:
 def _deduplicate_by_url(results: list[dict]) -> list[dict]:
     """Keep the first result for each non-empty URL."""
     seen: set[str] = set()
-    unique: list[dict] = []
+    unique_results: list[dict] = []
 
     for item in results:
-        url = item.get("url")
+        url = str(item.get("url") or "").strip()
         if not url or url in seen:
             continue
         seen.add(url)
-        unique.append(item)
+        unique_results.append(item)
 
-    return unique
+    return unique_results
+
+
+def _rank_results(results: list[dict], query: str, count: int) -> list[dict]:
+    """Deduplicate, rank by keyword overlap, and trim to the requested size."""
+    unique_results = _deduplicate_by_url(results)
+    unique_results.sort(key=lambda item: _keyword_overlap_score(item, query), reverse=True)
+    return unique_results[:count]
+
+
+def _mock_search_reports(query: str, count: int = 10) -> list[dict]:
+    """Local keyword-overlap fallback used when the live API is unavailable."""
+    keywords = _query_terms(query)
+    scored_results: list[tuple[int, dict]] = []
+
+    for doc in _MOCK_INDEX:
+        text = f"{doc['title']} {doc['snippet']}".lower()
+        overlap = sum(1 for keyword in keywords if keyword in text)
+        if overlap > 0:
+            scored_results.append((overlap, doc))
+
+    scored_results.sort(key=lambda item: item[0], reverse=True)
+    return [doc for _, doc in scored_results[:count]]
 
 
 def search_once(query: str, count: int = 10) -> list[dict]:
-    """Call the real search API exactly once for a query and return normalized results."""
+    """Call the live search API once and return normalized results."""
     expanded_query = expand_query(query)
     try:
         print(f"[search_once] Calling real API once for: {expanded_query}")
         raw_response = search_market_reports(expanded_query, count=count)
-        parsed_results = parse_search_results(raw_response)
-        normalized_results = [_normalize_result(item) for item in parsed_results if isinstance(item, dict)]
-        unique_results = _deduplicate_by_url(normalized_results)
-        unique_results.sort(key=lambda item: _keyword_overlap_score(item, query), reverse=True)
-        return unique_results[:count]
     except Exception as exc:
         print(f"[search_once] API request failed: {exc}")
         return []
 
+    parsed_results = parse_search_results(raw_response)
+    normalized_results = [_normalize_result(item) for item in parsed_results if isinstance(item, dict)]
+    return _rank_results(normalized_results, query, count)
+
 
 def search_reports(query: str, count: int = 10, use_api: bool = True) -> list[dict]:
-    """Retrieve candidate report documents using API search plus local fallbacks."""
+    """Retrieve candidate reports using live search first, then local fallback."""
     if use_api:
         api_results = search_once(query, count=count)
         if api_results:
@@ -220,12 +233,9 @@ def search_reports(query: str, count: int = 10, use_api: bool = True) -> list[di
 
     query_variants = [expand_query(query), *generate_queries(query)]
     aggregated_results: list[dict] = []
-
     for search_query in query_variants:
         aggregated_results.extend(_mock_search_reports(search_query, count=count))
 
-    unique_results = _deduplicate_by_url(aggregated_results)
-    unique_results.sort(key=lambda item: _keyword_overlap_score(item, query), reverse=True)
-
-    focused_results = [item for item in unique_results if _keyword_overlap_score(item, query) > 0]
-    return (focused_results or unique_results)[:count]
+    ranked_results = _rank_results(aggregated_results, query, count)
+    focused_results = [item for item in ranked_results if _keyword_overlap_score(item, query) > 0]
+    return focused_results or ranked_results

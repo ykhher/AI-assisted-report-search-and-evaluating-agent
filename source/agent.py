@@ -1,8 +1,7 @@
-"""Iterative agent layer for report ranking."""
+"""Main orchestration entrypoints for report ranking."""
 
 from __future__ import annotations
 
-import importlib.util
 import re
 import sys
 import time
@@ -10,51 +9,26 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from extractor import extract_signals, is_report, source_score
-from filter import filter_results
-from iteration_controller import diagnose_failure, rewrite_from_failure
+# Allow direct execution with `python source/agent.py`.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from source.extractor import extract_signals, is_report, source_score
+from source.filter import filter_results
+from source.controller import run_agent
+from source.fetching.document_fetcher import fetch_document
+from source.fetching.text_parser import parse_report_text
+from source.runtime.iteration_controller import diagnose_failure, rewrite_from_failure
 from local_qwen import get_local_qwen_status, rewrite_search_query
-from scoring import compute_rqi, final_score, generate_reason, rank_reports
-from search import search_once
-from exporter import export_to_csv, export_to_json
-from schemas import BatchResults, RankedReport, ScoreBreakdown
+from source.scoring import compute_rqi, final_score, generate_reason, rank_reports
+from source.search import search_once
+from source.runtime.exporter import export_to_csv, export_to_json
+from source.runtime.schemas import BatchResults, RankedReport, ScoreBreakdown
 
 _BASE_HINTS = ["pdf", "2024", "industry", "analysis", "forecast"]
 _YEAR_PATTERN = re.compile(r"\b(?:19|20)\d{2}\b")
 _DEFAULT_FETCH_TOP_N = 8
-
-
-def _load_optional_function(module_name: str, function_name: str):
-    """Load an optional function from normal imports or fallback file paths."""
-    try:
-        module = __import__(module_name, fromlist=[function_name])
-        return getattr(module, function_name, None)
-    except Exception:
-        pass
-
-    candidate_paths = [
-        Path(__file__).with_name(f"{module_name}.py"),
-        Path(__file__).parent / "full agent" / f"{module_name}.py",
-    ]
-
-    for file_path in candidate_paths:
-        if not file_path.exists():
-            continue
-        try:
-            spec = importlib.util.spec_from_file_location(f"{module_name}_dynamic", file_path)
-            if spec is None or spec.loader is None:
-                continue
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            return getattr(module, function_name, None)
-        except Exception:
-            continue
-
-    return None
-
-
-_FETCH_DOCUMENT = _load_optional_function("document_fetcher", "fetch_document")
-_PARSE_REPORT_TEXT = _load_optional_function("text_parser", "parse_report_text")
 
 
 def refine_query(query: str) -> str:
@@ -201,18 +175,18 @@ def _score_cached_results(
         fetch_meta: dict[str, Any] = {}
         parsed_meta: dict[str, Any] = {}
 
-        if id(doc) in to_fetch and _FETCH_DOCUMENT is not None:
+        if id(doc) in to_fetch:
             try:
-                fetched = _FETCH_DOCUMENT(str(doc.get("url", "")))
+                fetched = fetch_document(str(doc.get("url", "")))
                 if isinstance(fetched, dict):
                     fetch_meta = fetched
                     fetched_text = str(fetched.get("raw_text") or "").strip()
                     if fetched_text:
                         text = fetched_text
 
-                    if _PARSE_REPORT_TEXT is not None and fetched_text:
+                    if fetched_text:
                         try:
-                            parsed = _PARSE_REPORT_TEXT(fetched_text)
+                            parsed = parse_report_text(fetched_text)
                             if isinstance(parsed, dict):
                                 parsed_meta = parsed
                         except Exception as exc:
@@ -336,7 +310,7 @@ def _ranked_dict_to_schema(query: str, item: dict[str, Any], index: int) -> Rank
     )
 
 
-def agent_pipeline(
+def legacy_agent_pipeline(
     query: str,
     max_iters: int = 2,
     top_k: int = 10,
@@ -344,7 +318,12 @@ def agent_pipeline(
     export_results: bool = False,
     export_dir: str | Path = "outputs",
 ) -> list | dict[str, Any] | BatchResults:
-    """Run iterative ranking and return list, dict, or BatchResults output."""
+    """Run the original iterative ranking loop.
+
+    This implementation is kept intact as a reusable fallback so the new
+    controller can become the default execution path without discarding the
+    working legacy behavior.
+    """
     started_at = time.perf_counter()
     qwen_status = get_local_qwen_status()
     if qwen_status["available"]:
@@ -448,8 +427,73 @@ def agent_pipeline(
     return batch.to_dict()
 
 
-if __name__ == "__main__":
-    query = " ".join(sys.argv[1:]).strip() or "AI market report"
-    results = agent_pipeline(query)
-    for r in results:
-        print(r)
+def agent_pipeline(
+    query: str,
+    max_iters: int = 2,
+    top_k: int = 10,
+    output_format: Literal["list", "dict", "object"] = "dict",
+    export_results: bool = False,
+    export_dir: str | Path = "outputs",
+) -> list | dict[str, Any] | BatchResults:
+    """Run the new controller-first execution path with safe legacy fallback.
+
+    The controller is now the main orchestration layer. It reuses the existing
+    search, fetch, parse, classify, scoring, and ranking modules through the
+    tool registry. If that path raises an exception or returns no ranked
+    results, we fall back to the original iterative pipeline to preserve the
+    working core behavior.
+    """
+    try:
+        controller_result = run_agent(
+            user_query=query,
+            max_steps=max(6, max_iters * 5),
+            return_state=True,
+            verbose=True,
+        )
+        ranked_results = controller_result.get("ranked_results", [])
+
+        if ranked_results:
+            if output_format == "list" and not export_results:
+                return ranked_results[:top_k]
+
+            structured_results = [
+                _ranked_dict_to_schema(query, item, index=i + 1)
+                for i, item in enumerate(ranked_results[:top_k])
+            ]
+            batch = BatchResults(
+                query=query,
+                results=structured_results,
+                total_count=len(controller_result.get("state", {}).get("visited_urls", [])),
+                returned_count=len(structured_results),
+                iteration_count=len(controller_result.get("state", {}).get("rewritten_queries_tried", [])),
+                failure_type=(
+                    controller_result.get("state", {}).get("failure_history", [])[-1]
+                    if controller_result.get("state", {}).get("failure_history")
+                    else None
+                ),
+                processing_time_ms=float(controller_result.get("processing_time_ms", 0.0) or 0.0),
+            )
+
+            if export_results:
+                output_path = Path(export_dir)
+                export_to_json(batch, output_path / "ranked_reports.json", indent=2)
+                export_to_csv(batch.results, output_path / "ranked_reports.csv")
+
+            if output_format == "object":
+                return batch
+            return batch.to_dict()
+
+        print("[agent] Controller returned no ranked results; falling back to legacy pipeline.")
+    except Exception as exc:
+        print(f"[agent] Controller path failed: {exc}")
+        print("[agent] Falling back to legacy iterative pipeline.")
+
+    return legacy_agent_pipeline(
+        query=query,
+        max_iters=max_iters,
+        top_k=top_k,
+        output_format=output_format,
+        export_results=export_results,
+        export_dir=export_dir,
+    )
+

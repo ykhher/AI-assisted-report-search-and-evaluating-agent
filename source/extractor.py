@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -95,6 +94,11 @@ def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", str(text).lower()).strip()
 
 
+def _metadata_dict(metadata: Any) -> dict[str, Any]:
+    """Return metadata as a plain dictionary when possible."""
+    return metadata if isinstance(metadata, dict) else {}
+
+
 def has_methodology(text: str) -> int:
     """Return 1 only when at least two strong methodology signals appear."""
     cleaned = clean_text(text)
@@ -170,10 +174,7 @@ def numbered_reference_score(text: str) -> float:
 
 def compute_citation_score(text: str) -> float:
     """Combine consulting-style citation signals into one robust credibility feature."""
-    citation_score = max(
-        bottom_reference_score(text),
-        footnote_score(text),
-    )
+    citation_score = max(bottom_reference_score(text), footnote_score(text))
     citation_score += 0.2 * institution_score(text)
     return round(min(citation_score, 1.0), 3)
 
@@ -252,12 +253,13 @@ def source_score(source: Any, context_text: str = "") -> float:
 def extract_signals(text: str, metadata: dict) -> dict:
     """Extract normalized credibility signals from real-world report text."""
     raw_text = str(text)
-    year = metadata.get("year") if isinstance(metadata, dict) else None
+    metadata_map = _metadata_dict(metadata)
+    year = metadata_map.get("year")
 
     footnotes = footnote_score(raw_text)
     bottom_references = bottom_reference_score(raw_text)
     institutions = institution_score(raw_text)
-    source_name = metadata.get("source", "") if isinstance(metadata, dict) else ""
+    source_name = str(metadata_map.get("source", "")).strip()
     llm_scores = assess_text_signals(raw_text, source=str(source_name))
 
     methodology = round(max(float(has_methodology(raw_text)), float(llm_scores.get("methodology_score", 0.0))), 3)
@@ -297,59 +299,3 @@ def is_report(text: str, metadata: dict) -> bool:
         and len(section_matches) >= 3
         and report_kw_matches >= 2
     )
-
-
-if __name__ == "__main__":
-    test_cases = [
-        {
-            "name": "Academic-style text",
-            "text": (
-                "Introduction. Methodology: we conducted a longitudinal study with data collection across 250 firms. "
-                "Results show 18% growth [1] [2] and projected gains in 2025 (2024) (2023). "
-                "Conclusion summarizes the findings and limitations."
-            ),
-            "metadata": {"year": 2024},
-        },
-        {
-            "name": "Industry report with references section",
-            "text": (
-                "Introduction\nMethodology\nWe analyzed survey data from 180 executives.\nResults\nRevenue is expected to increase by 12%.\n"
-                "Conclusion\nThe outlook remains positive.\nReferences\n"
-                "1. McKinsey (2023) Global AI Report https://www.mckinsey.com/report\n"
-                "2. Deloitte report www.deloitte.com/insights/future-of-ai\n"
-                "3. World Bank industry outlook and source notes for 2024 and 2025\n"
-            ),
-            "metadata": {"year": 2024},
-        },
-        {
-            "name": "Consulting-style footnotes",
-            "text": (
-                "This report shows results.1 Data from IEA and IPCC.2\n"
-                "1 Source: IEA report 2024\n"
-                "2 Source: IPCC analysis"
-            ),
-            "metadata": {"year": 2024},
-        },
-        {
-            "name": "Blog-like text",
-            "text": (
-                "This blog talks about cool trends and opinions. It has no methodology, no references, and no source list."
-            ),
-            "metadata": {"year": 2024},
-        },
-    ]
-
-    for case in test_cases:
-        text = case["text"]
-        summary = {
-            "footnote_score": footnote_score(text),
-            "bottom_reference_score": bottom_reference_score(text),
-            "institution_score": institution_score(text),
-            "citation_score": compute_citation_score(text),
-            "signals": extract_signals(text, case["metadata"]),
-        }
-        print(f"\n--- {case['name']} ---")
-        print(json.dumps(summary, indent=2))
-
-        if case["name"] == "Consulting-style footnotes":
-            assert summary["citation_score"] > 0.7, summary
