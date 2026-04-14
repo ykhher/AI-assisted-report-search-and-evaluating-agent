@@ -50,9 +50,9 @@ _SOURCE_CLASS_MAP = {
 
 # Final ranking weights over clear sub-scores.
 FINAL_WEIGHTS: dict[str, float] = {
-    "relevance_score": 0.40,
-    "report_validity_score": 0.20,
-    "quality_score": 0.25,
+    "relevance_score": 0.30,
+    "report_validity_score": 0.15,
+    "quality_score": 0.40,
     "authority_score": 0.15,
 }
 
@@ -356,9 +356,6 @@ def compute_final_score(score_dict: Mapping[str, Any]) -> float:
         + FINAL_WEIGHTS["quality_score"] * quality_score
         + FINAL_WEIGHTS["authority_score"] * authority_score
     )
-
-    if validity_score < 0.25:
-        weighted *= 0.85
 
     return round(_clamp01(weighted), 3)
 
