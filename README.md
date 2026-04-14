@@ -140,9 +140,9 @@ These are combined into the final score in `source/scoring.py`:
 
 ```text
 final_score =
-  0.40 * relevance_score +
-  0.20 * report_validity_score +
-  0.25 * quality_score +
+  0.30 * relevance_score +
+  0.15 * report_validity_score +
+  0.40 * quality_score +
   0.15 * authority_score
 ```
 
@@ -174,16 +174,4 @@ Top Ranked Reports
    why: contains methodology, strong citation support, internally consistent analysis
    verify: medium confidence - Adoption is expected to reach 68% by 2025.
    url: https://example.com/enterprise-ai-benchmark-2025.pdf
-```
-
-## Benchmark evaluation
-
-You can run the lightweight benchmark like this:
-
-```bash
-python -m source.runtime.evaluate_agent \
-  --queries data/benchmark_queries.csv \
-  --labels data/benchmark_labels.json \
-  --output outputs/benchmark_results.json \
-  --k 5
 ```
