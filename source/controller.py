@@ -692,10 +692,6 @@ def apply_action(
         )
         return
 
-    # TODO: Add more actions here if the controller grows beyond the first
-    # deterministic loop. For now, unknown actions should fail loudly.
-    raise ValueError(f"Unknown controller action: {action_name}")
-
 
 def run_agent(
     user_query: str,
