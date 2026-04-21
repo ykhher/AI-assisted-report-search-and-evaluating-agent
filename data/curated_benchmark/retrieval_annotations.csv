@@ -1,101 +1,101 @@
 query_id,doc_id,relevance_label,result_class,ranking_preference,rationale
 q001,d001_01,3,good_report,1,"The document provides an enterprise AI adoption benchmark report with detailed methodologies, surveys, references, charts, and forecasts."
-q001,d001_02,3,good_report,1,No rationale provided.
-q001,d001_03,1,good_report,5,No rationale provided.
-q001,d001_04,1,good_report,5,No rationale provided.
-q001,d001_05,0,mediocre_report,5,The document does not provide clear evidence of enterprise AI adoption trends beyond mentioning older reports.
+q001,d001_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q001,d001_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q001,d001_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q001,d001_05,0,stale_report,3,The document does not provide clear evidence of enterprise AI adoption trends beyond mentioning older reports.
 q002,d002_01,3,good_report,1,"The document provides a detailed report on renewable energy investment outlook for the year 2025, which aligns with the query topic."
-q002,d002_02,3,good_report,5,The document provides a summary of renewable energy investment trends with selected statistics and limited source notes.
-q002,d002_03,1,good_report,5,No rationale provided.
-q002,d002_04,1,good_report,5,No rationale provided.
-q002,d002_05,0,mediocre_report,5,The document does not provide clear information about renewable energy investment forecast for the specified period.
+q002,d002_02,3,mediocre_report,2,The document provides a summary of renewable energy investment trends with selected statistics and limited source notes.
+q002,d002_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q002,d002_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q002,d002_05,0,stale_report,3,The document does not provide clear information about renewable energy investment forecast for the specified period.
 q003,d003_01,3,good_report,1,"The document provides a detailed EV battery market outlook for the year 2026, including methodology, survey sample, references, charts, and forecasts."
-q003,d003_02,3,good_report,1,No rationale provided.
-q003,d003_03,1,good_report,5,No rationale provided.
-q003,d003_04,1,good_report,5,No rationale provided.
-q003,d003_05,0,mediocre_report,5,The document does not provide clear historical forecasts for the EV battery market as mentioned in the snippet.
-q004,d004_01,3,good_report,1,No rationale provided.
-q004,d004_02,3,good_report,1,No rationale provided.
-q004,d004_03,1,good_report,5,No rationale provided.
-q004,d004_04,1,good_report,5,No rationale provided.
-q004,d004_05,0,mediocre_report,5,No rationale provided.
-q005,d005_01,3,good_report,1,No rationale provided.
-q005,d005_02,3,good_report,1,The document provides a detailed summary of cybersecurity spending trends with statistical information and limited source notes.
-q005,d005_03,1,good_report,5,No rationale provided.
-q005,d005_04,3,good_report,1,No rationale provided.
-q005,d005_05,0,mediocre_report,5,No rationale provided.
+q003,d003_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q003,d003_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q003,d003_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q003,d003_05,0,stale_report,3,The document does not provide clear historical forecasts for the EV battery market as mentioned in the snippet.
+q004,d004_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q004,d004_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q004,d004_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q004,d004_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q004,d004_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
+q005,d005_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q005,d005_02,3,mediocre_report,2,The document provides a detailed summary of cybersecurity spending trends with statistical information and limited source notes.
+q005,d005_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q005,d005_04,3,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q005,d005_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
 q006,d006_01,3,good_report,1,"The document provides a detailed analysis of the cloud computing outlook for the year 2025, including methodology, survey sample, references, charts, and forecasts."
-q006,d006_02,3,good_report,5,No rationale provided.
-q006,d006_03,1,good_report,5,No rationale provided.
-q006,d006_04,1,good_report,5,No rationale provided.
-q006,d006_05,0,mediocre_report,5,No rationale provided.
+q006,d006_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q006,d006_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q006,d006_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q006,d006_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
 q007,d007_01,3,good_report,1,"The document provides a detailed overview of the digital health market outlook for the year 2025, including methodology, survey sample, references, charts, and forecasts."
-q007,d007_02,3,good_report,1,No rationale provided.
-q007,d007_03,1,good_report,5,No rationale provided.
-q007,d007_04,1,good_report,5,No rationale provided.
-q007,d007_05,0,mediocre_report,5,The document does not provide clear evidence of digital health market forecast or historical overview beyond mentioning older PDFs.
-q008,d008_01,3,good_report,1,No rationale provided.
-q008,d008_02,3,good_report,1,No rationale provided.
-q008,d008_03,1,good_report,5,No rationale provided.
-q008,d008_04,3,good_report,1,No rationale provided.
-q008,d008_05,0,mediocre_report,5,The provided document does not contain relevant information related to the sustainable aviation fuel market analysis from 2024 to 2026.
-q009,d009_01,3,good_report,1,No rationale provided.
-q009,d009_02,3,good_report,1,No rationale provided.
-q009,d009_03,1,good_report,5,No rationale provided.
-q009,d009_04,1,good_report,5,No rationale provided.
-q009,d009_05,0,mediocre_report,5,No rationale provided.
+q007,d007_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q007,d007_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q007,d007_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q007,d007_05,0,stale_report,3,The document does not provide clear evidence of digital health market forecast or historical overview beyond mentioning older PDFs.
+q008,d008_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q008,d008_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q008,d008_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q008,d008_04,3,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q008,d008_05,0,stale_report,3,The provided document does not contain relevant information related to the sustainable aviation fuel market analysis from 2024 to 2026.
+q009,d009_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q009,d009_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q009,d009_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q009,d009_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q009,d009_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
 q010,d010_01,3,good_report,1,"The document provides a detailed financial outlook for the fintech payments industry in 2025, including methodology, survey sample, references, charts, and forecasts."
-q010,d010_02,3,good_report,1,No rationale provided.
-q010,d010_03,1,good_report,5,No rationale provided.
-q010,d010_04,1,good_report,1,No rationale provided.
-q010,d010_05,0,mediocre_report,5,The provided document does not contain relevant information about the fintech payments industry benchmark 2025.
-q011,d011_01,3,good_report,1,No rationale provided.
-q011,d011_02,3,good_report,1,No rationale provided.
-q011,d011_03,1,good_report,5,No rationale provided.
-q011,d011_04,1,good_report,5,No rationale provided.
-q011,d011_05,0,mediocre_report,5,No rationale provided.
-q012,d012_01,3,good_report,1,No rationale provided.
-q012,d012_02,3,good_report,1,No rationale provided.
-q012,d012_03,1,good_report,5,No rationale provided.
-q012,d012_04,1,good_report,5,No rationale provided.
-q012,d012_05,0,mediocre_report,5,The provided document does not contain any relevant information related to the agricultural technology market forecast for the specified time frame.
+q010,d010_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q010,d010_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q010,d010_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q010,d010_05,0,stale_report,3,The provided document does not contain relevant information about the fintech payments industry benchmark 2025.
+q011,d011_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q011,d011_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q011,d011_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q011,d011_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q011,d011_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
+q012,d012_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q012,d012_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q012,d012_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q012,d012_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q012,d012_05,0,stale_report,3,The provided document does not contain any relevant information related to the agricultural technology market forecast for the specified time frame.
 q013,d013_01,3,good_report,1,"The document provides a comprehensive overview of generative AI in banking, including methodologies, surveys, references, charts, and forecasts. It also includes a detailed analysis of the market outlook."
-q013,d013_02,3,good_report,1,"The document provides a summary of generative AI trends in banking, including statistics and limited source notes."
-q013,d013_03,1,good_report,5,No rationale provided.
-q013,d013_04,1,good_report,5,No rationale provided.
-q013,d013_05,1,good_report,5,No rationale provided.
-q014,d014_01,3,good_report,1,No rationale provided.
-q014,d014_02,3,good_report,5,The document provides a summary of hydrogen economy trends with selected statistics and limited source notes.
-q014,d014_03,1,good_report,5,No rationale provided.
-q014,d014_04,1,good_report,5,No rationale provided.
-q014,d014_05,0,mediocre_report,5,The document does not provide clear information about the hydrogen economy outlook for the specified year range.
-q015,d015_01,3,good_report,1,No rationale provided.
-q015,d015_02,3,good_report,1,No rationale provided.
-q015,d015_03,1,good_report,5,No rationale provided.
-q015,d015_04,1,good_report,5,No rationale provided.
-q015,d015_05,0,mediocre_report,5,No rationale provided.
+q013,d013_02,3,mediocre_report,2,"The document provides a summary of generative AI trends in banking, including statistics and limited source notes."
+q013,d013_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q013,d013_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q013,d013_05,1,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
+q014,d014_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q014,d014_02,3,mediocre_report,2,The document provides a summary of hydrogen economy trends with selected statistics and limited source notes.
+q014,d014_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q014,d014_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q014,d014_05,0,stale_report,3,The document does not provide clear information about the hydrogen economy outlook for the specified year range.
+q015,d015_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q015,d015_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q015,d015_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q015,d015_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q015,d015_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
 q016,d016_01,3,good_report,1,"The document provides a detailed report on the space economy market size outlook for the year 2026, which aligns closely with the query topic."
-q016,d016_02,3,good_report,1,No rationale provided.
-q016,d016_03,1,good_report,5,No rationale provided.
-q016,d016_04,3,good_report,1,No rationale provided.
-q016,d016_05,0,mediocre_report,5,The document does not provide clear information about the space economy market size forecast for the year 2025.
+q016,d016_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q016,d016_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q016,d016_04,3,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q016,d016_05,0,stale_report,3,The document does not provide clear information about the space economy market size forecast for the year 2025.
 q017,d017_01,3,good_report,1,"The document provides a detailed report on water infrastructure investment needs for the year 2025, which aligns with the query topic."
-q017,d017_02,3,good_report,5,The document provides a detailed summary of water infrastructure investment trends with selected statistics and limited source notes.
-q017,d017_03,1,good_report,5,No rationale provided.
-q017,d017_04,1,good_report,5,No rationale provided.
-q017,d017_05,0,mediocre_report,5,The document does not provide clear evidence of water infrastructure investment needs beyond mentioning older reports.
-q018,d018_01,3,good_report,1,No rationale provided.
-q018,d018_02,3,good_report,1,No rationale provided.
-q018,d018_03,1,good_report,5,No rationale provided.
-q018,d018_04,1,good_report,5,No rationale provided.
-q018,d018_05,0,mediocre_report,5,No rationale provided.
+q017,d017_02,3,mediocre_report,2,The document provides a detailed summary of water infrastructure investment trends with selected statistics and limited source notes.
+q017,d017_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q017,d017_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q017,d017_05,0,stale_report,3,The document does not provide clear evidence of water infrastructure investment needs beyond mentioning older reports.
+q018,d018_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q018,d018_02,3,mediocre_report,2,"Some evidence present, but method and transparency are limited."
+q018,d018_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q018,d018_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q018,d018_05,0,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
 q019,d019_01,3,good_report,1,"The document provides a detailed workforce skills gap survey report from the World Economic Forum in 2025, which aligns with the query topic."
-q019,d019_02,3,good_report,1,The document provides a detailed summary of workforce skills gap trends with selected statistics and limited source notes.
-q019,d019_03,1,good_report,5,No rationale provided.
-q019,d019_04,1,good_report,5,No rationale provided.
-q019,d019_05,0,mediocre_report,5,The document does not provide clear evidence of a workforce skills gap survey report from 2024.
-q020,d020_01,3,good_report,1,No rationale provided.
-q020,d020_02,3,good_report,1,The document provides a summary of data center energy demand trends with selected statistics and limited source notes.
-q020,d020_03,3,good_report,1,No rationale provided.
-q020,d020_04,3,good_report,1,No rationale provided.
-q020,d020_05,1,good_report,5,No rationale provided.
+q019,d019_02,3,mediocre_report,2,The document provides a detailed summary of workforce skills gap trends with selected statistics and limited source notes.
+q019,d019_03,1,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q019,d019_04,1,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q019,d019_05,0,stale_report,3,The document does not provide clear evidence of a workforce skills gap survey report from 2024.
+q020,d020_01,3,good_report,1,"Strong DEER signals: method, evidence, transparency, and recency all present."
+q020,d020_02,3,mediocre_report,2,The document provides a summary of data center energy demand trends with selected statistics and limited source notes.
+q020,d020_03,3,weak_page,4,"No visible method, source support, or verification-friendly evidence."
+q020,d020_04,3,false_positive,5,Recent but not methodical; evidence is mostly quotes rather than report data.
+q020,d020_05,1,stale_report,3,"Some structure exists, but weak recency makes it poor for current verification."
