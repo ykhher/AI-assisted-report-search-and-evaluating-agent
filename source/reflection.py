@@ -164,20 +164,21 @@ def should_stop(
     state: AgentState,
     candidates: list[dict[str, Any] | CandidateRecord] | None = None,
 ) -> bool:
-    """Stop when results look good enough or we are stuck."""
+    """Stop when results look good enough.
+
+    The controller owns the iteration budget, so repeated diagnoses should
+    trigger replanning until that budget is exhausted rather than stopping
+    reflection early.
+    """
     if state.stop_reason:
         return True
 
     progress = evaluate_progress(state, candidates)
-    if (
+    return (
         progress["usable_candidates"] >= MIN_USABLE_CANDIDATES
         and progress["top_final_score"] >= GOOD_TOP_SCORE
         and progress["avg_final_score"] >= GOOD_AVG_SCORE
-    ):
-        return True
-
-    recent_failures = state.failure_history[-2:]
-    return len(recent_failures) == 2 and recent_failures[0] == recent_failures[1]
+    )
 
 
 def summarize_progress(

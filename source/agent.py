@@ -445,7 +445,7 @@ def agent_pipeline(
     try:
         controller_result = run_agent(
             user_query=query,
-            max_steps=max(6, max_iters * 5),
+            max_steps=max(12, (max_iters + 1) * 10),
             return_state=True,
             verbose=True,
         )

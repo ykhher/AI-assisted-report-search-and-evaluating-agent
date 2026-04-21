@@ -1,0 +1,21 @@
+query_id,query,topic,industry,geography,target_year_min,target_year_max,intent,notes
+q001,enterprise AI adoption benchmark report 2025,enterprise AI adoption,technology,global,2024,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q002,renewable energy investment outlook 2024 report,renewable energy investment,energy,global,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q003,electric vehicle battery market forecast 2025,EV battery market,automotive,global,2024,2026,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q004,semiconductor supply chain resilience report 2024,semiconductor supply chain,semiconductors,global,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q005,cybersecurity spending trends benchmark 2024,cybersecurity spending,cybersecurity,north america,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q006,cloud computing industry outlook 2025 pdf,cloud computing outlook,technology,global,2024,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q007,digital health market report 2024,digital health market,healthcare,global,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q008,sustainable aviation fuel market analysis 2025,sustainable aviation fuel,aviation,global,2024,2026,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q009,commercial real estate outlook report 2024,commercial real estate outlook,real estate,united states,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q010,fintech payments industry benchmark 2025,fintech payments,financial services,global,2024,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q011,global e-commerce logistics report 2024,e-commerce logistics,logistics,global,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q012,agricultural technology market forecast 2025,agricultural technology,agriculture,global,2024,2026,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q013,generative AI in banking research report 2025,generative AI in banking,banking,global,2024,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q014,hydrogen economy outlook 2024 report,hydrogen economy,energy,global,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q015,insurance claims automation benchmark 2024,insurance claims automation,insurance,north america,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q016,space economy market size report 2025,space economy market size,aerospace,global,2024,2026,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q017,water infrastructure investment needs report 2024,water infrastructure investment,infrastructure,united states,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q018,retail media network benchmark report 2025,retail media networks,retail,north america,2024,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q019,workforce skills gap survey report 2024,workforce skills gap,labor market,global,2023,2025,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.
+q020,data center energy demand outlook 2025,data center energy demand,technology infrastructure,global,2024,2026,find recent credible industry or research reports,Synthetic benchmark query for capstone evaluation.

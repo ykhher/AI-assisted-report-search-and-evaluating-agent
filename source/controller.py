@@ -28,6 +28,7 @@ from source.filter import filter_results
 from source.planner import make_plan
 from source.reflection import diagnose_failure, should_stop, summarize_progress
 from source.runtime.iteration_controller import rewrite_from_failure
+from source.scoring import compute_verification_adjusted_final_score
 from source.tool_registry import get_tool_registry
 
 
@@ -48,6 +49,18 @@ MAX_REPLANS = 2
 DEFAULT_SEARCH_COUNT = 12
 DEFAULT_FETCH_LIMIT = 5
 DEFAULT_VERIFY_TOP_N = 3
+DEFAULT_MAX_STEPS = 30
+
+
+def _plan_int(plan: dict[str, Any], key: str, default: int) -> int:
+    """Read an integer plan option while preserving explicit zero values."""
+    value = plan.get(key)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _dedupe_preserve_order(items: list[str]) -> list[str]:
@@ -168,6 +181,80 @@ def _topic_relevance(query: str, text: str) -> float:
     return round(min(overlap, 1.0), 3)
 
 
+def _candidate_score(candidate: dict[str, Any], key: str, default: float = 0.0) -> float:
+    """Read a score from a ranked candidate or its score_breakdown."""
+    try:
+        if key in candidate:
+            return float(candidate.get(key, default) or default)
+        breakdown = candidate.get("score_breakdown", {})
+        if isinstance(breakdown, dict):
+            return float(breakdown.get(key, default) or default)
+    except (TypeError, ValueError):
+        return default
+    return default
+
+
+def _average_score(candidates: list[dict[str, Any]], key: str) -> float:
+    """Average a candidate score field safely."""
+    if not candidates:
+        return 0.0
+    return sum(_candidate_score(candidate, key) for candidate in candidates) / len(candidates)
+
+
+def _ranked_result_quality(ranked_results: list[dict[str, Any]]) -> float:
+    """Score a ranked result set so the controller can keep the best iteration."""
+    if not ranked_results:
+        return 0.0
+
+    top_results = ranked_results[:3]
+    top_final = max(_candidate_score(item, "final_score", _candidate_score(item, "score")) for item in top_results)
+    avg_final = _average_score(top_results, "final_score") or _average_score(top_results, "score")
+    avg_quality = _average_score(top_results, "quality_score")
+    avg_validity = _average_score(top_results, "report_validity_score")
+    avg_relevance = _average_score(top_results, "relevance_score")
+
+    return round(
+        0.35 * top_final
+        + 0.25 * avg_final
+        + 0.20 * avg_quality
+        + 0.10 * avg_validity
+        + 0.10 * avg_relevance,
+        6,
+    )
+
+
+def _rerank_after_verification(ranked_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rerank verified reports using verification-adjusted quality scores."""
+    reranked: list[dict[str, Any]] = []
+    for index, item in enumerate(ranked_results):
+        enriched = dict(item)
+        adjusted_breakdown = compute_verification_adjusted_final_score(enriched)
+        if enriched.get("verification_adjusted_quality_score") is not None:
+            enriched["pre_verification_score"] = enriched.get("score", adjusted_breakdown["final_score"])
+            enriched["pre_verification_score_breakdown"] = dict(enriched.get("score_breakdown", {}) or {})
+            enriched["score_breakdown"] = adjusted_breakdown
+            enriched["score"] = adjusted_breakdown["final_score"]
+            enriched["verification_reranked"] = True
+        else:
+            enriched.setdefault("verification_reranked", False)
+        enriched["_previous_rank"] = index + 1
+        reranked.append(enriched)
+
+    reranked.sort(
+        key=lambda item: (
+            float(item.get("score", 0.0) or 0.0),
+            -int(item.get("_previous_rank", 0) or 0),
+        ),
+        reverse=True,
+    )
+    for index, item in enumerate(reranked, start=1):
+        previous_rank = int(item.pop("_previous_rank", index) or index)
+        item["rank"] = index
+        if item.get("verification_reranked"):
+            item["pre_verification_rank"] = previous_rank
+    return reranked
+
+
 def _build_search_query(state: AgentState) -> str:
     """Build the current search query from plan + rewritten attempts."""
     active_query = _current_query(state).strip()
@@ -201,7 +288,8 @@ def _build_search_query(state: AgentState) -> str:
     if isinstance(search_hints, list):
         query_parts.extend(str(item) for item in search_hints[:3])
 
-    return " ".join(part for part in query_parts if str(part).strip()).strip()
+    expanded_query = " ".join(part for part in query_parts if str(part).strip()).strip()
+    return " ".join(_dedupe_preserve_order(expanded_query.split()))
 
 
 def revise_plan(state: AgentState, failure_type: str | None) -> dict[str, Any]:
@@ -220,8 +308,12 @@ def revise_plan(state: AgentState, failure_type: str | None) -> dict[str, Any]:
         # failure_type == "weak_quality_signals"
         # -> plan increases fetch depth and keeps fetch/parse before ranking
     """
-    current_query = _current_query(state)
+    current_query = str(state.current_plan.get("planning_query") or state.user_query).strip()
     rewritten_query = rewrite_from_failure(current_query, failure_type, max_additions=3) if failure_type else current_query
+    repeated_failure_count = state.failure_history.count(str(failure_type)) if failure_type else 0
+    if failure_type == "topic_drift" and repeated_failure_count >= 2:
+        rewritten_query = f"{state.user_query} empirical study survey working paper"
+
     revised_plan = make_plan(rewritten_query)
 
     revised_plan["planning_query"] = rewritten_query
@@ -236,15 +328,16 @@ def revise_plan(state: AgentState, failure_type: str | None) -> dict[str, Any]:
 
     revised_plan["preferred_source_classes"] = list(state.current_plan.get("preferred_source_classes", []))
     revised_plan["search_hints"] = list(state.current_plan.get("search_hints", []))
-    revised_plan["fetch_limit"] = int(state.current_plan.get("fetch_limit", DEFAULT_FETCH_LIMIT) or DEFAULT_FETCH_LIMIT)
-    revised_plan["verify_top_n"] = int(state.current_plan.get("verify_top_n", DEFAULT_VERIFY_TOP_N) or DEFAULT_VERIFY_TOP_N)
+    revised_plan["fetch_limit"] = _plan_int(state.current_plan, "fetch_limit", DEFAULT_FETCH_LIMIT)
+    revised_plan["verify_top_n"] = _plan_int(state.current_plan, "verify_top_n", DEFAULT_VERIFY_TOP_N)
 
     if failure_type == "topic_drift":
         revised_plan["task_type"] = "report_ranking"
         revised_plan["quality_priority"] = True
-        revised_plan["search_hints"] = _dedupe_preserve_order(
-            list(revised_plan["search_hints"]) + ["industry report", "analysis", "pdf"]
-        )
+        topic_hints = ["industry report", "analysis", "pdf"]
+        if repeated_failure_count >= 2:
+            topic_hints = ["empirical study", "survey", "working paper", "research report"]
+        revised_plan["search_hints"] = _dedupe_preserve_order(list(revised_plan["search_hints"]) + topic_hints)
 
     elif failure_type == "not_report_like":
         revised_plan["quality_priority"] = True
@@ -310,7 +403,7 @@ def revise_plan(state: AgentState, failure_type: str | None) -> dict[str, Any]:
         revised_plan["previous_query"] = current_query
         revised_plan["search_hints"] = ["market", "industry", "analysis"]
         revised_plan["fetch_limit"] = DEFAULT_FETCH_LIMIT
-        revised_plan["verify_top_n"] = int(state.current_plan.get("verify_top_n", DEFAULT_VERIFY_TOP_N) or DEFAULT_VERIFY_TOP_N)
+        revised_plan["verify_top_n"] = _plan_int(state.current_plan, "verify_top_n", DEFAULT_VERIFY_TOP_N)
 
     elif failure_type == "fetch_failures_dominant":
         revised_plan["fetch_limit"] = 2
@@ -599,6 +692,13 @@ def apply_action(
         ranked = tools["rank_candidates"](payloads, top_k=10, query=_current_query(state))
         context["ranked_results"] = ranked
 
+        current_quality = _ranked_result_quality(ranked)
+        best_quality = float(context.get("best_ranked_quality", 0.0) or 0.0)
+        if current_quality > best_quality:
+            context["best_ranked_quality"] = current_quality
+            context["best_ranked_results"] = list(ranked)
+            context["best_query"] = _current_query(state)
+
         rank_by_url = {str(item.get("url", "")): index + 1 for index, item in enumerate(ranked)}
         ranked_urls = set(rank_by_url)
         for candidate in state.candidates:
@@ -609,7 +709,11 @@ def apply_action(
         state.record_action(
             "rank_candidates",
             detail="Ranked candidates by final score",
-            payload={"ranked": len(ranked)},
+            payload={
+                "ranked": len(ranked),
+                "current_iteration_quality": current_quality,
+                "best_iteration_quality": context.get("best_ranked_quality", current_quality),
+            },
         )
         return
 
@@ -644,11 +748,23 @@ def apply_action(
             ranked_results[index] = verified
             verified_count += 1
 
+        ranked_results = _rerank_after_verification(ranked_results)
         context["ranked_results"] = ranked_results
+        verified_quality = _ranked_result_quality(ranked_results)
+        if verified_quality >= float(context.get("best_ranked_quality", 0.0) or 0.0):
+            context["best_ranked_quality"] = verified_quality
+            context["best_ranked_results"] = list(ranked_results)
+            context["best_query"] = _current_query(state)
+
         state.record_action(
             "verify_top_reports",
             detail="Attached lightweight verification notes to top ranked reports",
-            payload={"verified": verified_count, "verify_top_n": verify_top_n},
+            payload={
+                "verified": verified_count,
+                "verify_top_n": verify_top_n,
+                "reranked": True,
+                "top_score_after_verification": ranked_results[0].get("score", 0.0) if ranked_results else 0.0,
+            },
         )
         return
 
@@ -662,11 +778,18 @@ def apply_action(
 
         if should_stop(state, ranked):
             state.mark_stopped("sufficient_quality" if not failure else f"stopped_after_{failure}")
+        elif failure and len(state.rewritten_queries_tried) >= MAX_REPLANS + 1:
+            state.mark_stopped("max_replans_reached")
 
         state.record_action(
             "reflect",
             detail=summary,
-            payload={"failure": failure},
+            payload={
+                "failure": failure,
+                "current_iteration_quality": _ranked_result_quality(ranked) if isinstance(ranked, list) else 0.0,
+                "best_iteration_quality": context.get("best_ranked_quality", 0.0),
+                "best_query": context.get("best_query", ""),
+            },
         )
         return
 
@@ -692,14 +815,10 @@ def apply_action(
         )
         return
 
-    # TODO: Add more actions here if the controller grows beyond the first
-    # deterministic loop. For now, unknown actions should fail loudly.
-    raise ValueError(f"Unknown controller action: {action_name}")
-
 
 def run_agent(
     user_query: str,
-    max_steps: int = 10,
+    max_steps: int = DEFAULT_MAX_STEPS,
     tool_registry: dict[str, Any] | None = None,
     return_state: bool = False,
     verbose: bool = True,
@@ -713,7 +832,12 @@ def run_agent(
     initial_plan["planning_query"] = user_query
     initial_plan["verify_top_n"] = max(0, int(verify_top_n))
     state = AgentState(user_query=user_query, current_plan=initial_plan)
-    runtime_context: dict[str, Any] = {"ranked_results": []}
+    runtime_context: dict[str, Any] = {
+        "ranked_results": [],
+        "best_ranked_results": [],
+        "best_ranked_quality": 0.0,
+        "best_query": user_query,
+    }
 
     for step_index in range(1, max_steps + 1):
         action_name = choose_next_action(state)
@@ -740,7 +864,7 @@ def run_agent(
 
     state.processing_time_ms = round((time.perf_counter() - started_at) * 1000.0, 3)
 
-    ranked_results = runtime_context.get("ranked_results", [])
+    ranked_results = runtime_context.get("best_ranked_results") or runtime_context.get("ranked_results", [])
     if return_state:
         return {
             "query": user_query,
@@ -748,6 +872,8 @@ def run_agent(
             "ranked_results": ranked_results,
             "stop_reason": state.stop_reason,
             "processing_time_ms": state.processing_time_ms,
+            "best_query": runtime_context.get("best_query", user_query),
+            "best_ranked_quality": runtime_context.get("best_ranked_quality", 0.0),
             "state": state.to_dict(),
         }
     return ranked_results

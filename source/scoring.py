@@ -36,7 +36,19 @@ _GENERIC_QUERY_TERMS = {
 
 _REPORT_HINT_TERMS = (
     "report", "whitepaper", "benchmark", "survey", "analysis", "outlook",
+    "index", "study", "research", "findings", "annual", "global",
 )
+
+_REPORT_LIKE_TYPES = {
+    "report",
+    "research_report",
+    "benchmark",
+    "survey",
+    "whitepaper",
+    "research_note",
+    "working_paper",
+    "deck",
+}
 
 _SOURCE_CLASS_MAP = {
     "high": 0.9,
@@ -49,10 +61,12 @@ _SOURCE_CLASS_MAP = {
 
 
 # Final ranking weights over clear sub-scores.
+# Balanced for live web retrieval: snippets often lack methodology/citation text,
+# so relevance, report-validity, and authority need meaningful influence.
 FINAL_WEIGHTS: dict[str, float] = {
-    "relevance_score": 0.40,
+    "relevance_score": 0.35,
     "report_validity_score": 0.20,
-    "quality_score": 0.25,
+    "quality_score": 0.30,
     "authority_score": 0.15,
 }
 
@@ -91,6 +105,111 @@ def _contains_report_hints(text: str) -> bool:
     """Return True when text looks like report-style content."""
     lowered = str(text).lower()
     return any(term in lowered for term in _REPORT_HINT_TERMS)
+
+
+def _is_report_like_type(value: Any) -> bool:
+    """Return True for classifier labels that represent report-like documents."""
+    return str(value or "").strip().lower() in _REPORT_LIKE_TYPES
+
+
+def _nested_metric(payload: Mapping[str, Any] | None, path: tuple[str, ...], default: float = 0.0) -> float:
+    """Read a nested numeric verification metric safely."""
+    current: Any = payload or {}
+    for key in path:
+        if not isinstance(current, Mapping):
+            return default
+        current = current.get(key)
+    return _clamp01(current)
+
+
+def _scaled_metric(value: Any, scale: float) -> float:
+    """Scale an unbounded positive metric into [0, 1]."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if scale <= 0:
+        return _clamp01(numeric)
+    return _clamp01(numeric / scale)
+
+
+def _verification_quality_components(metrics: Mapping[str, Any] | None) -> dict[str, float] | None:
+    """Map verification metrics onto the six quality sub-components.
+
+    The verifier produces integrity/sufficiency metrics after claims are
+    checked. This function folds those metrics back into the same conceptual
+    buckets used by `quality_score`:
+    methodology, citation/reference, consistency, structure, data, and claim.
+    """
+    if not isinstance(metrics, Mapping):
+        return None
+
+    raw_claims = metrics.get("raw", {}).get("claim_metrics", {}) if isinstance(metrics.get("raw"), Mapping) else {}
+    total_claims = 0
+    if isinstance(raw_claims, Mapping):
+        try:
+            total_claims = int(raw_claims.get("total_claims", 0) or 0)
+        except (TypeError, ValueError):
+            total_claims = 0
+    if total_claims <= 0:
+        return None
+
+    claim_accuracy = _nested_metric(metrics, ("integrity", "claim_factuality", "claim_accuracy"))
+    external_claim_accuracy = _nested_metric(metrics, ("integrity", "claim_factuality", "external_claim_accuracy"))
+    external_numeric_claim_accuracy = _nested_metric(
+        metrics,
+        ("integrity", "claim_factuality", "external_numeric_claim_accuracy"),
+    )
+    citation_accuracy = _nested_metric(metrics, ("integrity", "citation_validity", "citation_accuracy"))
+    supported_per_shown = _nested_metric(metrics, ("integrity", "reference_accuracy", "supported_per_shown"))
+    supported_per_used = _nested_metric(metrics, ("integrity", "reference_accuracy", "supported_per_used"))
+    used_per_shown = _nested_metric(metrics, ("integrity", "reference_accuracy", "used_per_shown"))
+    reproducibility = _nested_metric(metrics, ("integrity", "reference_quality", "reproducibility"))
+    reliability = _nested_metric(metrics, ("integrity", "reference_quality", "reliability"))
+    diversity_hhi = _scaled_metric(
+        metrics.get("integrity", {}).get("reference_diversity", {}).get("diversity_hhi", 0.0)
+        if isinstance(metrics.get("integrity"), Mapping)
+        else 0.0,
+        10.0,
+    )
+    verified_claims_ratio = _nested_metric(metrics, ("sufficiency", "source_support", "verified_claims_ratio"))
+    average_citations_per_claim = _scaled_metric(
+        metrics.get("sufficiency", {}).get("source_support", {}).get("average_citations_per_claim", 0.0)
+        if isinstance(metrics.get("sufficiency"), Mapping)
+        else 0.0,
+        2.0,
+    )
+
+    return {
+        "methodology": round((reproducibility + reliability + verified_claims_ratio) / 3.0, 3),
+        "citation": round(
+            (
+                0.30 * citation_accuracy
+                + 0.20 * supported_per_shown
+                + 0.20 * supported_per_used
+                + 0.10 * used_per_shown
+                + 0.10 * reliability
+                + 0.10 * diversity_hhi
+            ),
+            3,
+        ),
+        "consistency": round((claim_accuracy + external_claim_accuracy) / 2.0, 3),
+        "structure": round((used_per_shown + verified_claims_ratio) / 2.0, 3),
+        "data_support": round(external_numeric_claim_accuracy, 3),
+        "claim_density": round(
+            (
+                0.40 * verified_claims_ratio
+                + 0.30 * average_citations_per_claim
+                + 0.30 * external_claim_accuracy
+            ),
+            3,
+        ),
+    }
+
+
+def _blend_quality_component(base: float, verification: float, verification_weight: float) -> float:
+    """Blend a base quality component with its verification-derived counterpart."""
+    return _clamp01((1.0 - verification_weight) * _clamp01(base) + verification_weight * _clamp01(verification))
 
 
 def compute_structure_score(text: str) -> float:
@@ -211,10 +330,12 @@ def compute_report_validity_score(doc: Mapping[str, Any], parsed: Mapping[str, A
 
     parsed_word_count = int(parsed.get("word_count", 0) or 0)
     word_count = parsed_word_count if parsed_word_count > 0 else _word_count(text)
-    length_component = min(word_count / 800.0, 1.0)
+    has_full_text = word_count >= 250
+    length_component = min(word_count / 800.0, 1.0) if has_full_text else min(word_count / 160.0, 0.45)
 
     is_pdf = bool(doc.get("is_pdf", False) or url.lower().endswith(".pdf"))
-    report_format_component = 1.0 if (is_pdf or _contains_report_hints(f"{title} {text}")) else 0.35
+    has_report_hints = _contains_report_hints(f"{title} {text} {url}")
+    report_format_component = 1.0 if (is_pdf or has_report_hints) else 0.35
 
     section_lengths = parsed.get("section_lengths", {})
     if isinstance(section_lengths, dict) and section_lengths:
@@ -244,6 +365,13 @@ def compute_report_validity_score(doc: Mapping[str, Any], parsed: Mapping[str, A
         + 0.20 * _clamp01(section_component)
         + 0.20 * _clamp01(evidence_component)
     )
+
+    # SERP snippets and PDF landing pages often do not expose full sections.
+    # Give clearly report-like short results a modest floor, but still keep
+    # true low-information pages below fully parsed reports.
+    if not has_full_text and has_report_hints:
+        snippet_floor = 0.42 if is_pdf else 0.34
+        score = max(score, snippet_floor)
     
     # NEW: Blend with classifier validity if provided
     if classifier_validity is not None:
@@ -287,6 +415,15 @@ def compute_quality_score(signals: Mapping[str, Any], parsed: Mapping[str, Any] 
     data_support = round(data_density ** 1.3, 3)
     claim_density = _clamp01(signals.get("claim_density", compute_claim_density(raw_text)))
 
+    verification_components = _verification_quality_components(signals.get("verification_metrics"))
+    if verification_components:
+        methodology = _blend_quality_component(methodology, verification_components["methodology"], 0.20)
+        citation = _blend_quality_component(citation, verification_components["citation"], 0.35)
+        consistency = _blend_quality_component(consistency, verification_components["consistency"], 0.30)
+        structure = _blend_quality_component(structure, verification_components["structure"], 0.15)
+        data_support = _blend_quality_component(data_support, verification_components["data_support"], 0.30)
+        claim_density = _blend_quality_component(claim_density, verification_components["claim_density"], 0.30)
+
     score = (
         0.22 * methodology
         + 0.22 * citation
@@ -296,7 +433,67 @@ def compute_quality_score(signals: Mapping[str, Any], parsed: Mapping[str, Any] 
         + 0.10 * claim_density
     )
 
+    report_type = signals.get("report_type")
+    classifier_validity = _clamp01(signals.get("report_validity_score_classifier", 0.0))
+    report_like = _is_report_like_type(report_type) or _contains_report_hints(raw_text)
+    word_count = _word_count(raw_text)
+
+    # When only SERP snippets or blocked PDF landing pages are available, the
+    # hard evidence signals above are often absent even for useful reports.
+    # Use a capped proxy floor so report-like, recent, authoritative snippets
+    # are not crushed to zero, while weak pages still need actual evidence.
+    if report_like and word_count < 500:
+        authority_proxy = max(
+            _clamp01(signals.get("authority_prior", 0.0)),
+            _clamp01(signals.get("source", 0.0)),
+            _clamp01(signals.get("llm_source_score", 0.0)),
+        )
+        recency_proxy = _clamp01(signals.get("recency", 0.0))
+        snippet_proxy = (
+            0.18
+            + 0.12 * classifier_validity
+            + 0.10 * authority_proxy
+            + 0.08 * recency_proxy
+            + 0.07 * data_density
+            + 0.05 * claim_density
+        )
+        score = max(score, min(snippet_proxy, 0.52))
+
     return round(_clamp01(score), 3)
+
+
+def compute_verification_adjusted_quality_score(
+    signals: Mapping[str, Any],
+    verification_metrics: Mapping[str, Any],
+    parsed: Mapping[str, Any] | None = None,
+) -> float:
+    """Recompute quality after verification metrics are available."""
+    enriched_signals = dict(signals or {})
+    enriched_signals["verification_metrics"] = dict(verification_metrics or {})
+    return compute_quality_score(enriched_signals, parsed=parsed)
+
+
+def compute_verification_adjusted_final_score(report: Mapping[str, Any]) -> dict[str, float]:
+    """Return score_breakdown using verification-adjusted quality when available."""
+    breakdown = dict(report.get("score_breakdown", {}) or {})
+    adjusted_quality = report.get("verification_adjusted_quality_score")
+    if adjusted_quality is None:
+        return {
+            "relevance_score": _clamp01(breakdown.get("relevance_score", report.get("relevance_score", 0.0))),
+            "report_validity_score": _clamp01(breakdown.get("report_validity_score", report.get("report_validity_score", 0.0))),
+            "quality_score": _clamp01(breakdown.get("quality_score", report.get("quality_score", 0.0))),
+            "authority_score": _clamp01(breakdown.get("authority_score", report.get("authority_score", 0.0))),
+            "final_score": _clamp01(breakdown.get("final_score", report.get("score", 0.0))),
+        }
+
+    adjusted_breakdown = {
+        "relevance_score": _clamp01(breakdown.get("relevance_score", report.get("relevance_score", 0.0))),
+        "report_validity_score": _clamp01(breakdown.get("report_validity_score", report.get("report_validity_score", 0.0))),
+        "quality_score": _clamp01(adjusted_quality),
+        "authority_score": _clamp01(breakdown.get("authority_score", report.get("authority_score", 0.0))),
+    }
+    adjusted_breakdown["final_score"] = compute_final_score(adjusted_breakdown)
+    return adjusted_breakdown
 
 
 def compute_authority_score(source: Any, source_class: str | None = None, authority_prior: float | None = None) -> float:
@@ -356,9 +553,6 @@ def compute_final_score(score_dict: Mapping[str, Any]) -> float:
         + FINAL_WEIGHTS["quality_score"] * quality_score
         + FINAL_WEIGHTS["authority_score"] * authority_score
     )
-
-    if validity_score < 0.25:
-        weighted *= 0.85
 
     return round(_clamp01(weighted), 3)
 

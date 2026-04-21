@@ -153,7 +153,7 @@ def _normalize_result(item: dict) -> dict:
         "source": source,
         "date": item.get("date"),
         "year": item.get("year"),
-        "is_pdf": url.lower().endswith(".pdf") or "pdf" in url.lower(),
+        "is_pdf": bool(item.get("is_pdf", False)) or url.lower().endswith(".pdf") or "pdf" in url.lower(),
     }
 
 
