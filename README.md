@@ -1,75 +1,72 @@
 # Industry Report Discovery Agent
 
-This project is an agent for finding industry and research reports, filtering weak or non-report results, scoring report quality, and returning a ranked list with short explanations.
-
-The code started as a retrieval-and-ranking pipeline and has moved toward an explicit agent loop with planning, tool use, reflection, replanning, verification, and post-verification reranking.
+An agent for finding, filtering, scoring, and verifying industry and research reports. Given a user query, it searches the web, classifies candidates, scores quality across interpretable dimensions, verifies claims, and returns a ranked list with explanations.
 
 ## What It Does
 
-Given a query like `"enterprise AI adoption report 2025"`, the agent will:
+Given a query like `"enterprise AI adoption report 2025"`, the agent:
 
-- interpret the request into a structured plan
-- search the web through SerpApi Google Search
-- normalize and filter candidate documents
-- fetch and parse fuller document text when possible
-- classify source authority and document type
-- extract credibility and analytical quality signals
-- score and rank candidate reports
-- reflect on result quality and replan if results are weak
-- extract claims from top reports
-- extract citations from report text
-- run deterministic lightweight claim verification
-- compute verification metrics
-- recompute verification-adjusted quality
-- rerank verified results when verification changes the evidence picture
+1. interprets the request into a structured plan
+2. searches the web via SerpApi Google Search
+3. normalises and filters candidate documents
+4. fetches and parses fuller document text when possible
+5. classifies source authority and document type
+6. extracts credibility and analytical quality signals
+7. scores and ranks candidate reports
+8. reflects on result quality and replans if results are weak
+9. extracts claims and citations from top reports
+10. runs deterministic lightweight claim verification
+11. recomputes verification-adjusted quality scores
+12. reranks verified results
 
-The verification layer is intentionally lightweight. It does not use an LLM. It checks local report evidence, extracted citation URLs, numeric matches, source reliability, and claim/context overlap. This makes the behavior explainable and suitable for a capstone system.
+The verification layer is intentionally lightweight and LLM-free. It checks local report evidence, extracted citation URLs, numeric matches, source reliability, and claim/context overlap — making the behavior explainable and auditable.
 
 ## System Flow
 
 ```text
 User query
--> planner
--> agent state
--> controller loop
--> search / fetch / parse / classify / score / rank
--> reflect
--> replan and repeat if quality is weak
--> verify top reports
--> recompute verification-adjusted quality
--> rerank
--> final ranked results
+  → planner
+  → agent state
+  → controller loop
+      → search / fetch / parse / classify / score / rank
+      → reflect
+      → replan and repeat if quality is weak
+  → verify top reports
+  → recompute verification-adjusted quality
+  → rerank
+  → final ranked results
 ```
 
-The controller is deterministic. Reflection diagnoses failures such as topic drift, weak quality signals, too few results, low authority, stale results, or fetch failures. The agent can replan and search again until quality is sufficient or the replan budget is exhausted.
+Reflection diagnoses failures such as topic drift, weak quality signals, too few results, low authority, stale results, or fetch failures. The agent replans and searches again until quality is sufficient or the replan budget is exhausted.
 
-## Main Files
+## Project Layout
 
 ```text
 agent/
-  main.py
+  main.py                         entry point (wraps source/main.py)
   README.md
   requirements.txt
-  local_qwen.py
+  local_qwen.py                   optional local Qwen integration
   source/
-    main.py
-    agent.py
-    controller.py
-    planner.py
-    agent_state.py
-    tool_registry.py
-    reflection.py
-    verification.py
-    verification_metrics.py
-    claim_verifier.py
-    citation_extractor.py
-    search.py
-    API.py
-    filter.py
-    extractor.py
-    scoring.py
-    query_handler.py
-    pipeline.py
+    main.py                       CLI runner
+    agent.py                      agent loop
+    controller.py                 controller and replan logic
+    planner.py                    structured query planning
+    agent_state.py                shared agent state
+    tool_registry.py              registered tool definitions
+    reflection.py                 quality reflection and diagnosis
+    verification.py               claim and citation verification
+    verification_metrics.py       verification metric computation
+    claim_verifier.py             deterministic claim checker
+    citation_extractor.py         URL and reference extraction
+    search.py                     search helpers and fallback
+    API.py                        SerpApi wrapper
+    filter.py                     weak result filtering
+    extractor.py                  text signal extraction
+    scoring.py                    composite quality scoring
+    query_handler.py              query rewriting and expansion
+    pipeline.py                   end-to-end pipeline wiring
+    ranking.py                    final ranker
     classifier/
       source_classifier.py
       report_classifier.py
@@ -78,8 +75,8 @@ agent/
       text_parser.py
       parser.py
     runtime/
-      curated_benchmark.py
-      evaluate_agent.py
+      curated_benchmark.py        benchmark runner and tuner
+      evaluate_agent.py           agent evaluation harness
       iteration_controller.py
       exporter.py
       schemas.py
@@ -88,262 +85,124 @@ agent/
     benchmark_queries.csv
     benchmark_labels.json
     curated_benchmark/
-      queries.csv
-      documents.csv
-      retrieval_annotations.csv
-      quality_annotations.csv
+      queries.csv                 20 representative queries
+      documents.csv               5 candidate documents per query (real URLs)
+      retrieval_annotations.csv   relevance and result-class labels
+      quality_annotations.csv     DEER-inspired quality labels
       README.md
+  scripts/
+    update_document_urls.py       renew document URLs via SerpApi search
+    annotate_benchmark.py         annotate benchmark with Qwen + heuristic
 ```
 
-## Search API
+## Installation
 
-The live search wrapper is [source/API.py](source/API.py). It uses SerpApi Google Search:
+Python 3.10+ is recommended.
 
-```text
-https://serpapi.com/search.json
+```bash
+pip install -r requirements.txt
 ```
 
-The API key can be provided with:
+Optional local Qwen support requires a downloaded `Qwen2.5-*-Instruct` model in the Hugging Face cache (`~/.cache/huggingface/hub/`). The main pipeline is fully deterministic without it.
+
+## Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `SERPAPI_API_KEY` | Required for live web search |
+| `USE_LOCAL_QWEN` | Set to `1` to enable local Qwen inference |
+| `QWEN_MODEL_PATH` | Override the Qwen model directory |
+| `QWEN_EXTRA_SITE_PACKAGES` | Point to a venv site-packages with torch/transformers |
+
+Do not commit API keys to the repository.
+
+## Running the Agent
+
+```bash
+# Basic
+python source/main.py "enterprise AI adoption benchmark report 2025"
+
+# With debug state
+python source/main.py "enterprise AI adoption benchmark report 2025" --debug
+
+# JSON output
+python source/main.py "enterprise AI adoption benchmark report 2025" --json
+
+# Control verification depth
+python source/main.py "enterprise AI adoption benchmark report 2025" --verify-top-n 3
+```
+
+On Windows with a local venv:
 
 ```powershell
-$env:SERPAPI_API_KEY="your-key"
+.\.venv\Scripts\python.exe source\main.py "enterprise AI adoption benchmark report 2025"
 ```
 
-Do not commit API keys to the repository. If `SERPAPI_API_KEY` is not set, live search will fail and the agent can fall back to local mock results where that path is enabled.
+## Example Output
+
+```text
+Query: enterprise AI adoption benchmark report 2025
+Stop reason: sufficient_quality
+Processing time: 1842 ms
+
+Top Ranked Reports
+────────────────────────────────────────────────────────────────────────────────
+1. State of Enterprise AI Adoption Report 2025
+   score=0.781  type=report  source=https://example.com/report.pdf
+   summary: Covers enterprise AI adoption trends for 2025.
+   why: contains methodology, strong citation support, internally consistent analysis
+   verify: high confidence — Adoption increased by 35% in 2025.
+```
 
 ## Scoring
 
 The ranker uses four interpretable components:
 
-- `relevance_score`
-- `report_validity_score`
-- `quality_score`
-- `authority_score`
-
-These are computed in [source/scoring.py](source/scoring.py).
-
-### Final Score
-
-The current final ranking formula is:
-
 ```text
 final_score =
-  0.35 * relevance_score
-+ 0.20 * report_validity_score
-+ 0.30 * quality_score
-+ 0.15 * authority_score
+  0.35 × relevance_score
++ 0.20 × report_validity_score
++ 0.30 × quality_score
++ 0.15 × authority_score
 ```
-
-This balance is designed for live web retrieval, where many search results provide only snippets or PDF landing pages.
 
 ### Relevance
 
-`relevance_score` measures query-topic overlap:
-
-```text
-relevance_score =
-  overlap(query_terms, text_terms) / number_of_query_terms
-```
-
-Generic report-search terms such as `pdf`, `report`, `industry`, `analysis`, and `forecast` are ignored when possible so the score focuses on topic words.
+Measures query-topic overlap, ignoring generic terms like `pdf`, `report`, `industry`, `forecast`.
 
 ### Report Validity
 
-`report_validity_score` estimates whether a candidate is a real report rather than a weak page, blog, landing page, or generic article.
-
-It uses:
-
-- document length
-- PDF/report-like format hints
-- report sections
-- methodology, references, or statistical language
-- classifier validity from `report_classifier.py`
-
-Formula:
-
-```text
-report_validity_score =
-  0.35 * length_component
-+ 0.25 * report_format_component
-+ 0.20 * section_component
-+ 0.20 * evidence_component
-```
-
-There is also snippet-aware fallback logic so short but clearly report-like SERP results are not crushed to near zero.
+Estimates whether a candidate is a structured report rather than a blog, landing page, or news snippet. Signals: document length, PDF format hints, report section headings, methodology and reference language.
 
 ### Quality
 
-`quality_score` measures analytical and verification-friendly report quality.
+Six sub-components blended into a single score:
 
-It is made from six components:
+| Component | Weight | What it measures |
+|---|---|---|
+| methodology | 0.22 | Research design, survey description, benchmark process |
+| reference | 0.22 | Citations, footnotes, named institutional sources |
+| consistency | 0.18 | Coherent claims backed by data |
+| structure | 0.14 | Report-like section organisation |
+| data | 0.14 | Non-year numeric density |
+| claim | 0.10 | Verifiable analytical claims |
 
-```text
-quality_score =
-  0.22 * methodology
-+ 0.22 * reference
-+ 0.18 * consistency
-+ 0.14 * structure
-+ 0.14 * data
-+ 0.10 * claim
-```
+### Authority
 
-In code, `reference` is named `citation`, `data` is named `data_support`, and `claim` is named `claim_density`.
+Classifies the publishing source (intergovernmental body, consulting firm, research provider, trade media, etc.).
 
-#### Methodology
+## Verification and Reranking
 
-Methodology asks whether the report explains how its findings were produced.
+Implemented in `source/verification.py`, `claim_verifier.py`, `citation_extractor.py`, and `verification_metrics.py`. The verifier:
 
-Text signals include:
-
-- `methodology`
-- `methods`
-- `research design`
-- `data collection`
-- `sampling`
-- `we conducted`
-- `we analyzed`
-
-After verification, methodology is also adjusted by:
-
-- reproducibility
-- reliability
-- verified claims ratio
-
-#### Reference
-
-Reference asks whether the report cites sources and whether those citations support the claims.
-
-Text signals include:
-
-- footnotes
-- numbered references
-- reference sections
-- source notes
-- known institutions such as World Bank, OECD, IEA, IPCC, UN, McKinsey
-
-Verification signals include:
-
-- citation accuracy
-- supported references per shown reference
-- supported references per used reference
-- used references per shown reference
-- source reliability
-- reference diversity HHI
-
-#### Consistency
-
-Consistency asks whether the report's claims are coherent and evidence-backed.
-
-Text signals include:
-
-- numbers inside analytical sections
-- claim language such as `increase`, `decrease`, `forecast`, `projected`, and `expected`
-- parsed statistical language
-
-Verification signals include:
-
-- claim accuracy
-- external claim accuracy
-
-#### Structure
-
-Structure asks whether the document is organized like a real report.
-
-Text signals include sections such as:
-
-- introduction
-- methodology
-- results
-- conclusion
-- summary
-- assumptions
-- references
-
-Verification signals include:
-
-- used references per shown reference
-- verified claims ratio
-
-#### Data
-
-Data asks whether the report uses concrete quantitative evidence.
-
-The system counts non-year numeric tokens such as:
-
-- percentages
-- counts
-- rates
-- decimals
-
-Calendar years like `2024` and `2025` are excluded from numeric density.
-
-The raw data metric is:
-
-```text
-data_density =
-  non_year_numeric_tokens / total_words
-```
-
-Then:
-
-```text
-data_support = data_density ^ 1.3
-```
-
-Verification adjusts this with external numeric claim accuracy.
-
-#### Claim
-
-Claim asks whether the report makes meaningful analytical claims and whether those claims are verifiable.
-
-Text signals include claim words such as:
-
-- increase
-- decrease
-- forecast
-- projected
-- expected
-
-Verification signals include:
-
-- verified claims ratio
-- average citations per claim
-- external claim accuracy
-
-## Verification And Reranking
-
-Verification is implemented in:
-
-- [source/verification.py](source/verification.py)
-- [source/claim_verifier.py](source/claim_verifier.py)
-- [source/citation_extractor.py](source/citation_extractor.py)
-- [source/verification_metrics.py](source/verification_metrics.py)
-
-The verifier does not use an LLM. It:
-
-- extracts important claims
-- extracts URLs and numbered references from report text
-- maps claims to citation URLs when possible
+- extracts important claims from top report text
+- extracts URLs and numbered references
+- maps claims to citation URLs
 - checks numeric matches and token overlap
 - classifies source reliability
-- computes verification metrics
+- computes 12 verification metrics
 
-Verification metrics include:
-
-- claim accuracy
-- external claim accuracy
-- external numeric claim accuracy
-- citation accuracy
-- supported references per shown reference
-- supported references per used reference
-- used references per shown reference
-- reproducibility
-- reliability
-- reference diversity HHI
-- verified claims ratio
-- average citations per claim
-
-These metrics are blended back into the six quality components. The blend is bounded:
+Metrics are blended back into quality sub-components with bounded weights:
 
 ```text
 methodology = 80% original + 20% verification
@@ -354,112 +213,74 @@ data        = 70% original + 30% verification
 claim       = 70% original + 30% verification
 ```
 
-After verification, the controller recomputes a verification-adjusted final score and reranks the verified reports. Verified results may include:
-
-```text
-verification_adjusted_quality_score
-pre_verification_score
-pre_verification_rank
-verification_metrics
-verified_claims
-extracted_citations
-```
-
 ## Curated Benchmark
 
-The curated benchmark lives in [data/curated_benchmark](data/curated_benchmark).
+The benchmark lives in [`data/curated_benchmark/`](data/curated_benchmark/). It contains 20 queries, 5 candidate documents per query (100 total), relevance/ranking labels, and DEER-inspired quality labels.
 
-It contains:
+Document URLs point to real, live reports found via web search — not synthetic placeholders.
 
-- `queries.csv`: 20 representative report-search queries
-- `documents.csv`: 5 candidate documents per query
-- `retrieval_annotations.csv`: relevance and ranking labels
-- `quality_annotations.csv`: compressed DEER-inspired quality labels
+### Refresh document URLs
 
-Generate and validate the starter benchmark:
+Searches SerpApi for each query and replaces any stale URLs in `documents.csv`:
+
+```bash
+SERPAPI_API_KEY=<key> python scripts/update_document_urls.py
+
+# Preview without writing
+SERPAPI_API_KEY=<key> python scripts/update_document_urls.py --dry-run
+```
+
+### Re-annotate with Qwen
+
+Annotates all 100 documents with Qwen-generated quality labels, using a hybrid strategy: Qwen scores quality dimensions (evidence, transparency, recency, authority, relevance), heuristics resolve structural fields (`result_class`, `ranking_preference`, `deer_method_label`) that the small model cannot reliably classify from short snippets.
+
+```bash
+# Requires USE_LOCAL_QWEN=1 and a downloaded Qwen2.5-*-Instruct model.
+# Use a single venv Python to avoid cross-venv torchvision conflicts.
+USE_LOCAL_QWEN=1 /path/to/venv/Scripts/python.exe scripts/annotate_benchmark.py
+
+# Single query
+USE_LOCAL_QWEN=1 /path/to/venv/Scripts/python.exe scripts/annotate_benchmark.py --query q003
+
+# Preview without saving
+USE_LOCAL_QWEN=1 /path/to/venv/Scripts/python.exe scripts/annotate_benchmark.py --dry-run
+
+# Without Qwen (heuristic-only fallback)
+python scripts/annotate_benchmark.py
+```
+
+### Benchmark evaluation commands
 
 ```powershell
+# Validate and write benchmark starter
 .\.venv\Scripts\python.exe source\runtime\curated_benchmark.py --write
-```
 
-Rank benchmark documents through the existing scoring path:
-
-```powershell
+# Rank benchmark documents through the scoring path
 .\.venv\Scripts\python.exe source\runtime\curated_benchmark.py --rank
-```
 
-Tune final score weights:
-
-```powershell
+# Tune final score weights
 .\.venv\Scripts\python.exe source\runtime\curated_benchmark.py --tune --top-n 10
 ```
 
-The benchmark uses DEER only as an expert-informed annotation framework. It does not copy the full DEER rubric.
+## Local Qwen Integration
 
-## Installation
+`local_qwen.py` provides optional on-device inference using a Hugging Face `Qwen2.5-*-Instruct` model. It is used in two places:
 
-Python 3.10+ is recommended.
+- **`assess_text_signals`** — scores reference quality, methodology, consistency, and source authority from fetched report text, feeding additional signal into the main scoring pipeline.
+- **`suggest_search_queries`** / **`rewrite_search_query`** — generates improved search queries for a given topic.
 
-Install dependencies:
+Enable with:
 
 ```bash
-pip install -r requirements.txt
+USE_LOCAL_QWEN=1 python source/main.py "..."
 ```
 
-The project works without optional local Qwen support. If local Qwen is enabled through environment variables, it can provide extra signal estimates, but the main pipeline is deterministic and does not require it.
-
-## Running The Agent
-
-Readable CLI:
-
-```powershell
-.\.venv\Scripts\python.exe source\main.py "enterprise AI adoption benchmark report 2025"
-```
-
-With debug state:
-
-```powershell
-.\.venv\Scripts\python.exe source\main.py "enterprise AI adoption benchmark report 2025" --debug
-```
-
-With JSON output:
-
-```powershell
-.\.venv\Scripts\python.exe source\main.py "enterprise AI adoption benchmark report 2025" --json
-```
-
-Control verification depth:
-
-```powershell
-.\.venv\Scripts\python.exe source\main.py "enterprise AI adoption benchmark report 2025" --verify-top-n 3
-```
-
-## Example Output
-
-Readable CLI output looks like this:
-
-```text
-Query: enterprise AI adoption benchmark report 2025
-Stop reason: sufficient_quality
-Processing time: 1842.317 ms
-
-Top Ranked Reports
---------------------------------------------------------------------------------
-1. State of Enterprise AI Adoption Report 2025
-   score=0.781  type=report  source=https://example.com/report.pdf
-   summary: This report covers state of enterprise ai adoption report 2025.
-   why: contains methodology, strong citation support, internally consistent analysis
-   verify: high confidence - Adoption increased by 35% in 2025.
-```
+The module discovers models and compatible venvs automatically. If inference fails, all functions return safe defaults and the pipeline continues without disruption.
 
 ## Design Notes
 
-The system is intentionally modular:
-
-- search can be swapped without changing scoring
-- scoring is interpretable and weighted
-- verification is deterministic and explainable
-- reflection and replanning are controller-level behaviors
-- the curated benchmark is small but defensible
-
-This makes the project suitable for explaining, testing, and improving each stage independently.
+- **Search is swappable** without touching scoring or verification.
+- **Scoring is weighted and interpretable** — each component has a documented formula and can be tuned independently.
+- **Verification is deterministic** — no LLM, no external calls beyond what was already fetched.
+- **Reflection and replanning** are controller-level behaviors separate from scoring logic.
+- **The benchmark is small but real** — 20 curated queries, live report URLs, document-specific Qwen annotations.

@@ -1,101 +1,101 @@
 doc_id,report_validity_label,deer_method_label,deer_evidence_label,deer_transparency_label,deer_recency_label,authority_label,verification_support_label,overall_quality_label,rationale
-d001_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d001_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d001_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d001_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d001_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d002_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d002_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d002_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d002_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d002_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d003_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d003_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d003_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d003_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d003_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d004_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d004_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d004_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d004_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d004_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d005_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d005_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d005_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d005_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d005_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d006_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d006_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d006_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d006_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d006_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d007_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d007_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d007_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d007_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d007_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d008_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d008_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d008_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d008_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d008_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d009_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d009_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d009_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d009_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d009_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d010_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d010_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d010_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d010_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d010_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d011_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d011_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d011_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d011_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d011_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d012_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d012_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d012_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d012_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d012_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d013_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d013_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d013_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d013_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d013_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d014_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d014_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d014_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d014_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d014_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d015_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d015_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d015_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d015_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d015_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d016_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d016_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d016_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d016_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d016_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d017_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d017_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d017_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d017_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d017_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d018_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d018_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d018_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d018_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d018_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d019_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d019_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d019_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d019_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d019_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
-d020_01,3,3,3,3,3,3,3,3,"Strong compressed DEER signals: method, evidence, transparency, and recency are all present."
-d020_02,2,1,2,1,2,1,2,2,"Some evidence is present, but method and transparency are limited."
-d020_03,0,0,0,0,3,1,0,0,"No visible method, source support, or verification-friendly evidence."
-d020_04,0,0,1,0,3,1,1,1,Recent but not methodical; evidence is mostly quotations rather than report support.
-d020_05,2,1,1,1,0,1,1,1,"Some structure exists, but weak recency makes it poor for current verification."
+d001_01,3,0,3,3,3,3,3,3,"The document provides an enterprise AI adoption benchmark report with detailed methodologies, surveys, references, charts, and forecasts."
+d001_02,3,0,3,3,3,3,3,3,No rationale provided.
+d001_03,3,0,0,3,0,3,0,3,No rationale provided.
+d001_04,3,0,0,3,0,3,0,3,No rationale provided.
+d001_05,0,0,0,0,0,0,0,0,The document does not provide clear evidence of enterprise AI adoption trends beyond mentioning older reports.
+d002_01,3,0,3,3,3,3,3,3,"The document provides a detailed report on renewable energy investment outlook for the year 2025, which aligns with the query topic."
+d002_02,3,0,3,3,3,3,3,3,The document provides a summary of renewable energy investment trends with selected statistics and limited source notes.
+d002_03,3,0,0,3,0,3,0,3,No rationale provided.
+d002_04,3,0,0,3,0,3,0,3,No rationale provided.
+d002_05,0,0,0,0,0,0,0,0,The document does not provide clear information about renewable energy investment forecast for the specified period.
+d003_01,3,0,3,3,3,3,3,3,"The document provides a detailed EV battery market outlook for the year 2026, including methodology, survey sample, references, charts, and forecasts."
+d003_02,3,0,3,3,3,3,3,3,No rationale provided.
+d003_03,3,0,0,3,0,3,0,3,No rationale provided.
+d003_04,3,0,0,3,0,3,0,3,No rationale provided.
+d003_05,0,0,0,0,0,0,0,0,The document does not provide clear historical forecasts for the EV battery market as mentioned in the snippet.
+d004_01,3,0,3,3,3,3,3,3,No rationale provided.
+d004_02,3,0,3,3,3,3,3,3,No rationale provided.
+d004_03,3,0,0,3,0,3,0,3,No rationale provided.
+d004_04,3,0,0,3,0,3,0,3,No rationale provided.
+d004_05,0,0,0,0,0,0,0,0,No rationale provided.
+d005_01,3,0,3,3,3,3,3,3,No rationale provided.
+d005_02,3,0,3,3,3,3,3,3,The document provides a detailed summary of cybersecurity spending trends with statistical information and limited source notes.
+d005_03,3,0,0,3,0,3,0,3,No rationale provided.
+d005_04,3,0,3,3,0,3,3,3,No rationale provided.
+d005_05,0,0,0,0,0,0,0,0,No rationale provided.
+d006_01,3,0,3,3,3,3,3,3,"The document provides a detailed analysis of the cloud computing outlook for the year 2025, including methodology, survey sample, references, charts, and forecasts."
+d006_02,3,0,0,3,3,3,3,3,No rationale provided.
+d006_03,3,0,0,3,0,3,0,3,No rationale provided.
+d006_04,3,0,0,3,3,3,0,3,No rationale provided.
+d006_05,0,0,0,0,0,0,0,0,No rationale provided.
+d007_01,3,0,3,3,3,3,3,3,"The document provides a detailed overview of the digital health market outlook for the year 2025, including methodology, survey sample, references, charts, and forecasts."
+d007_02,3,0,3,3,3,3,3,3,No rationale provided.
+d007_03,3,0,0,3,0,3,0,3,No rationale provided.
+d007_04,3,0,0,3,0,3,0,3,No rationale provided.
+d007_05,0,0,0,0,0,0,0,0,The document does not provide clear evidence of digital health market forecast or historical overview beyond mentioning older PDFs.
+d008_01,3,0,3,3,3,3,3,3,No rationale provided.
+d008_02,3,0,0,3,3,3,3,3,No rationale provided.
+d008_03,3,0,0,3,0,3,0,3,No rationale provided.
+d008_04,3,0,0,3,3,3,0,3,No rationale provided.
+d008_05,0,0,0,0,0,0,0,0,The provided document does not contain relevant information related to the sustainable aviation fuel market analysis from 2024 to 2026.
+d009_01,3,0,3,3,3,3,3,3,No rationale provided.
+d009_02,3,0,3,3,3,3,3,3,No rationale provided.
+d009_03,3,0,0,3,0,3,0,3,No rationale provided.
+d009_04,3,0,0,3,3,3,0,3,No rationale provided.
+d009_05,0,0,0,0,0,0,0,0,No rationale provided.
+d010_01,3,0,3,3,3,3,3,3,"The document provides a detailed financial outlook for the fintech payments industry in 2025, including methodology, survey sample, references, charts, and forecasts."
+d010_02,3,0,3,3,3,3,3,3,No rationale provided.
+d010_03,3,0,0,3,0,3,0,3,No rationale provided.
+d010_04,3,0,0,3,0,3,0,3,No rationale provided.
+d010_05,0,0,0,0,0,0,0,0,The provided document does not contain relevant information about the fintech payments industry benchmark 2025.
+d011_01,3,0,3,3,3,3,3,3,No rationale provided.
+d011_02,3,0,3,3,3,3,3,3,No rationale provided.
+d011_03,3,0,3,0,3,3,0,3,No rationale provided.
+d011_04,3,0,0,3,3,3,0,3,No rationale provided.
+d011_05,0,0,0,0,0,0,0,0,No rationale provided.
+d012_01,3,0,3,3,3,3,3,3,No rationale provided.
+d012_02,3,0,3,3,3,3,3,3,No rationale provided.
+d012_03,3,0,0,3,0,3,0,3,No rationale provided.
+d012_04,3,0,0,3,3,3,0,3,No rationale provided.
+d012_05,0,0,0,0,0,0,0,0,The provided document does not contain any relevant information related to the agricultural technology market forecast for the specified time frame.
+d013_01,3,0,3,3,3,3,3,3,"The document provides a comprehensive overview of generative AI in banking, including methodologies, surveys, references, charts, and forecasts. It also includes a detailed analysis of the market outlook."
+d013_02,3,0,3,3,3,3,3,3,"The document provides a summary of generative AI trends in banking, including statistics and limited source notes."
+d013_03,3,0,0,3,0,3,0,3,No rationale provided.
+d013_04,3,0,0,3,0,3,0,3,No rationale provided.
+d013_05,3,0,0,0,0,0,0,3,No rationale provided.
+d014_01,3,0,3,3,3,3,3,3,No rationale provided.
+d014_02,3,0,3,3,3,3,3,3,The document provides a summary of hydrogen economy trends with selected statistics and limited source notes.
+d014_03,3,0,0,3,0,3,0,3,No rationale provided.
+d014_04,3,0,0,3,0,3,0,3,No rationale provided.
+d014_05,0,0,0,0,0,0,0,0,The document does not provide clear information about the hydrogen economy outlook for the specified year range.
+d015_01,3,0,3,3,3,3,3,3,No rationale provided.
+d015_02,3,0,3,3,3,3,3,3,No rationale provided.
+d015_03,3,0,0,3,0,3,0,3,No rationale provided.
+d015_04,3,0,0,3,0,3,0,3,No rationale provided.
+d015_05,0,0,0,0,0,0,0,0,No rationale provided.
+d016_01,3,0,3,3,3,3,3,3,"The document provides a detailed report on the space economy market size outlook for the year 2026, which aligns closely with the query topic."
+d016_02,3,0,3,3,3,3,3,3,No rationale provided.
+d016_03,3,0,0,3,0,3,0,3,No rationale provided.
+d016_04,3,0,3,3,3,3,3,3,No rationale provided.
+d016_05,0,0,0,0,0,0,0,0,The document does not provide clear information about the space economy market size forecast for the year 2025.
+d017_01,3,0,3,3,3,3,3,3,"The document provides a detailed report on water infrastructure investment needs for the year 2025, which aligns with the query topic."
+d017_02,3,0,3,3,3,3,3,3,The document provides a detailed summary of water infrastructure investment trends with selected statistics and limited source notes.
+d017_03,3,0,0,3,0,3,0,3,No rationale provided.
+d017_04,3,0,0,3,0,3,0,3,No rationale provided.
+d017_05,0,0,0,0,0,0,0,0,The document does not provide clear evidence of water infrastructure investment needs beyond mentioning older reports.
+d018_01,3,0,3,3,3,3,3,3,No rationale provided.
+d018_02,3,0,0,3,3,3,3,3,No rationale provided.
+d018_03,3,0,0,3,0,3,0,3,No rationale provided.
+d018_04,3,0,0,3,0,3,0,3,No rationale provided.
+d018_05,0,0,0,0,0,0,0,0,No rationale provided.
+d019_01,3,0,3,3,3,3,3,3,"The document provides a detailed workforce skills gap survey report from the World Economic Forum in 2025, which aligns with the query topic."
+d019_02,3,0,3,3,3,3,3,3,The document provides a detailed summary of workforce skills gap trends with selected statistics and limited source notes.
+d019_03,3,0,0,3,0,3,0,3,No rationale provided.
+d019_04,3,0,0,3,0,3,0,3,No rationale provided.
+d019_05,0,0,0,0,0,0,0,0,The document does not provide clear evidence of a workforce skills gap survey report from 2024.
+d020_01,3,0,3,3,3,3,3,3,No rationale provided.
+d020_02,3,0,3,3,3,3,3,3,The document provides a summary of data center energy demand trends with selected statistics and limited source notes.
+d020_03,3,0,3,0,3,3,0,3,No rationale provided.
+d020_04,3,0,3,3,3,3,3,3,No rationale provided.
+d020_05,3,0,0,3,0,0,0,3,No rationale provided.
