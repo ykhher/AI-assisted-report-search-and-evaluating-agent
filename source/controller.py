@@ -1,18 +1,24 @@
-"""Deterministic single-agent controller for report discovery and ranking.
+"""LLM-guided single-agent controller for report discovery and ranking.
 
+The local Qwen model acts as the decision brain: after each step it inspects
+the current state and picks the next action from the available action set.
+Rule-based logic handles terminal transitions (reflect → replan → search) and
+serves as the fallback when the LLM is unavailable or returns an invalid action.
+
+Execution flow:
     plan
-    -> choose next action
+    -> LLM (or rules) choose next action
     -> call tool(s)
     -> update state
-    -> reflect
+    -> LLM reflect / diagnose
     -> replan or stop
 
-Example flow:
+Example step log:
     # [controller] step=1 action=search
-    # [controller] step=2 action=filter_reports
-    # [controller] step=3 action=fetch_top_docs
-    # [controller] step=4 action=parse_docs
-    # [controller] reflection: Step=reflect, usable_candidates=4, avg_final_score=0.671, ...
+    # [controller] step=2 action=filter_reports  [llm]
+    # [controller] step=3 action=fetch_top_docs  [llm]
+    # [controller] step=4 action=score_candidates [llm] (skipped parse — snippets sufficient)
+    # [controller] reflection: usable_candidates=4, avg_final_score=0.671, ...
 """
 
 from __future__ import annotations
@@ -22,13 +28,14 @@ import time
 from datetime import datetime
 from typing import Any
 
+from local_qwen import _generate, _local_qwen_enabled
 from source.agent_state import AgentState
 from source.extractor import is_report
 from source.filter import filter_results
-from source.planner import make_plan
+from source.query.planner import make_plan
 from source.reflection import diagnose_failure, should_stop, summarize_progress
 from source.runtime.iteration_controller import rewrite_from_failure
-from source.scoring import compute_verification_adjusted_final_score
+from source.scoring import compute_relevance_score, compute_verification_adjusted_final_score
 from source.tool_registry import get_tool_registry
 
 
@@ -45,11 +52,36 @@ CONTROLLER_ACTIONS = [
     "reflect",
 ]
 
-MAX_REPLANS = 2
+MAX_REPLANS = 5
 DEFAULT_SEARCH_COUNT = 12
 DEFAULT_FETCH_LIMIT = 5
 DEFAULT_VERIFY_TOP_N = 3
 DEFAULT_MAX_STEPS = 30
+
+_LLM_ACTION_SYSTEM = """\
+You are the decision brain of a report discovery agent.
+After each step you review the current execution state and choose the single best next action.
+
+Available actions:
+  search              - retrieve candidate documents from the web
+  filter_reports      - drop non-report-like candidates
+  classify_candidates - classify source authority and report type for each candidate
+  fetch_top_docs      - HTTP-fetch full text for the top candidates
+  parse_docs          - parse fetched text into sections, word count, and quality flags
+  extract_signals     - extract credibility signals (methodology, citations, data density)
+  score_candidates    - compute relevance, quality, validity, and authority sub-scores
+  rank_candidates     - sort candidates by final score
+  verify_top_reports  - extract and verify key claims in the top-ranked reports
+  reflect             - evaluate overall quality and decide whether to stop or replan
+
+Decision rules:
+  - Reply with ONLY the action name. No explanation, no punctuation.
+  - Always start with search if no candidates exist yet.
+  - Skip fetch_top_docs and parse_docs if candidates already have full text.
+  - Skip verify_top_reports if the top score is already above 0.85.
+  - Choose reflect after rank_candidates or verify_top_reports.
+  - Do not repeat the action that just completed.\
+"""
 
 
 def _plan_int(plan: dict[str, Any], key: str, default: int) -> int:
@@ -169,16 +201,6 @@ def _infer_year(candidate: dict[str, Any]) -> int | None:
             return int(match.group(0))
     return None
 
-
-def _topic_relevance(query: str, text: str) -> float:
-    """Compute a lightweight query overlap score for filtering and scoring prep."""
-    query_terms = set(_query_keywords(query))
-    if not query_terms:
-        return 0.0
-
-    text_terms = set(re.findall(r"[a-z0-9]+", str(text).lower()))
-    overlap = len(query_terms & text_terms) / len(query_terms)
-    return round(min(overlap, 1.0), 3)
 
 
 def _candidate_score(candidate: dict[str, Any], key: str, default: float = 0.0) -> float:
@@ -423,21 +445,66 @@ def revise_plan(state: AgentState, failure_type: str | None) -> dict[str, Any]:
     return revised_plan
 
 
-def choose_next_action(state: AgentState) -> str | None:
-    """Choose the next deterministic controller action.
+def _state_summary_for_llm(state: AgentState, context: dict[str, Any]) -> str:
+    """Build a compact state snapshot for the LLM action chooser."""
+    ranked = context.get("ranked_results", [])
+    scores = [float(r.get("score", 0) or 0) for r in ranked]
+    top_score = max(scores, default=0.0)
+    avg_score = sum(scores[:3]) / len(scores[:3]) if scores[:3] else 0.0
+    has_full_text = sum(1 for c in state.candidates if c.metadata.get("raw_text"))
+    recent = [rec["action"] for rec in state.action_history[-6:]]
+    return (
+        f"last_action={state.current_step}\n"
+        f"recent_actions={recent}\n"
+        f"candidates_active={len(state.candidates)}\n"
+        f"candidates_filtered_out={len(state.filtered_out)}\n"
+        f"candidates_with_full_text={has_full_text}\n"
+        f"ranked_results={len(ranked)}\n"
+        f"top_score={top_score:.3f}\n"
+        f"avg_top3_score={avg_score:.3f}\n"
+        f"failed_urls={len(state.failed_urls)}\n"
+        f"failure_history={state.failure_history}\n"
+        f"replans_used={max(0, len(state.rewritten_queries_tried) - 1)}\n"
+        f"user_query={state.user_query}\n"
+        f"\nChoose the single best next action:"
+    )
 
-    Rules:
-    - start with the normalized planner steps
-    - after reflection, either stop or replan
-    - after replan, restart from search
+
+def _llm_choose_action(state: AgentState, context: dict[str, Any]) -> str | None:
+    """Ask the local LLM to pick the next controller action.
+
+    Returns a validated action name, or None if the LLM is unavailable or
+    produces an unrecognised token.
+    """
+    if not _local_qwen_enabled():
+        return None
+    try:
+        summary = _state_summary_for_llm(state, context)
+        raw = _generate(summary, system=_LLM_ACTION_SYSTEM, max_new_tokens=16)
+        if not raw:
+            return None
+        for token in re.split(r"[\s,.\n]+", raw.strip().lower()):
+            if token in CONTROLLER_ACTIONS and token != state.current_step:
+                return token
+    except Exception:
+        pass
+    return None
+
+
+def choose_next_action(
+    state: AgentState,
+    context: dict[str, Any] | None = None,
+    use_llm: bool = False,
+) -> str | None:
+    """Choose the next controller action — LLM-guided when available, rule-based fallback.
+
+    Terminal transitions (reflect → replan, replan → search) are always
+    rule-based so the LLM cannot create infinite loops or skip mandatory gates.
     """
     if state.stop_reason:
         return None
 
-    if state.current_step == "plan":
-        planned_actions = _normalize_plan_steps(state.current_plan)
-        return planned_actions[0] if planned_actions else "search"
-
+    # Terminal transitions stay rule-based regardless of LLM setting.
     if state.current_step == "reflect":
         if state.stop_reason:
             return None
@@ -447,6 +514,17 @@ def choose_next_action(state: AgentState) -> str | None:
 
     if state.current_step == "replan":
         return "search"
+
+    # LLM brain: let the model inspect state and pick the next action.
+    if use_llm and context is not None:
+        llm_action = _llm_choose_action(state, context)
+        if llm_action:
+            return llm_action
+
+    # Rule-based fallback (also used when LLM is disabled or unavailable).
+    if state.current_step == "plan":
+        planned_actions = _normalize_plan_steps(state.current_plan)
+        return planned_actions[0] if planned_actions else "search"
 
     if state.current_step == "rank_candidates":
         verify_top_n = int(state.current_plan.get("verify_top_n", DEFAULT_VERIFY_TOP_N) or 0)
@@ -485,7 +563,15 @@ def apply_action(
 
     if action_name == "search":
         search_query = _build_search_query(state)
-        results = tools["search"](search_query, count=DEFAULT_SEARCH_COUNT)
+        plan_topic = str(state.current_plan.get("topic") or "").strip() or None
+        year_constraint = state.current_plan.get("year_constraint")
+        plan_year_terms = str(year_constraint) if year_constraint else None
+        results = tools["search"](
+            search_query,
+            count=DEFAULT_SEARCH_COUNT,
+            topic=plan_topic,
+            year_terms=plan_year_terms,
+        )
         state.rewritten_queries_tried.append(search_query)
         state.record_action("search", detail=f"Ran search for: {search_query}", payload={"result_count": len(results)})
 
@@ -656,7 +742,7 @@ def apply_action(
             signals["report_validity_score_classifier"] = payload.get("report_validity_score", 0.0)
 
             payload["signals"] = signals
-            payload["relevance"] = _topic_relevance(active_query, signals["_text"])
+            payload["relevance"] = compute_relevance_score(active_query, signals["_text"])
             payload["year"] = metadata["year"]
             extracted_count += 1
 
@@ -823,10 +909,22 @@ def run_agent(
     return_state: bool = False,
     verbose: bool = True,
     verify_top_n: int = DEFAULT_VERIFY_TOP_N,
+    use_llm_brain: bool = True,
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    """Run the deterministic single-agent loop for one user query."""
+    """Run the LLM-guided agent loop for one user query.
+
+    When use_llm_brain=True (default) and the local Qwen model is available,
+    the LLM inspects state after each step and chooses the next action. The
+    rule-based logic serves as the fallback when the LLM is unavailable or
+    returns an unrecognised action.
+    """
     started_at = time.perf_counter()
     tools = tool_registry or get_tool_registry()
+
+    llm_active = use_llm_brain and _local_qwen_enabled()
+    if verbose:
+        mode = "llm-guided" if llm_active else "rule-based"
+        print(f"[controller] brain={mode}")
 
     initial_plan = make_plan(user_query)
     initial_plan["planning_query"] = user_query
@@ -840,12 +938,13 @@ def run_agent(
     }
 
     for step_index in range(1, max_steps + 1):
-        action_name = choose_next_action(state)
+        action_name = choose_next_action(state, context=runtime_context, use_llm=llm_active)
         if action_name is None:
             break
 
         if verbose:
-            print(f"[controller] step={step_index} action={action_name}")
+            tag = " [llm]" if llm_active and state.current_step not in ("plan", "replan") else ""
+            print(f"[controller] step={step_index} action={action_name}{tag}")
 
         apply_action(
             state=state,

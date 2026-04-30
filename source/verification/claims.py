@@ -19,7 +19,7 @@ from typing import Any
 
 from source.classifier.source_classifier import classify_source
 from source.fetching.document_fetcher import fetch_document
-from source.verification_metrics import clean_url
+from source.verification.metrics import clean_url
 
 
 ALLOWED_RESULTS = {"supported", "not_supported", "error"}

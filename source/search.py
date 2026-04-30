@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import os
 import re
 import sys
 from pathlib import Path
@@ -14,10 +16,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from source.API import search_market_reports
 from source.fetching.parser import parse_search_results
-from source.query_handler import generate_queries
+from source.query.handler import _base_topic, _year_terms, generate_queries
 
 
-REQUIRED_QUERY_TERMS = ["pdf", "report", "2024", "industry", "analysis"]
+REQUIRED_QUERY_TERMS = ["report", "pdf"]
 GENERIC_QUERY_TERMS = {
     "pdf",
     "report",
@@ -26,15 +28,28 @@ GENERIC_QUERY_TERMS = {
     "2025",
     "industry",
     "analysis",
+    "benchmark",
+    "benchmarks",
+    "credible",
+    "data",
+    "evidence",
     "market",
     "forecast",
+    "findings",
+    "methodology",
     "outlook",
     "cagr",
     "projection",
     "research",
+    "results",
     "size",
+    "study",
+    "survey",
+    "surveys",
     "revenue",
     "filetype",
+    "quality",
+    "recent",
 }
 
 _MOCK_INDEX = [
@@ -142,6 +157,64 @@ def expand_query(query: str) -> str:
     return f"{base_query} {' '.join(missing_terms)}".strip()
 
 
+def _as_bool(value: object) -> bool:
+    """Parse common CSV boolean values."""
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _as_int(value: object) -> int | None:
+    """Parse an integer CSV value when available."""
+    try:
+        return int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _curated_rows() -> list[dict]:
+    """Load curated benchmark documents as a local retrieval fallback."""
+    data_dir = PROJECT_ROOT / "data" / "curated_benchmark"
+    documents_path = data_dir / "documents.csv"
+    queries_path = data_dir / "queries.csv"
+    if not documents_path.exists() or not queries_path.exists():
+        return []
+
+    query_meta: dict[str, dict] = {}
+    try:
+        with queries_path.open(newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                query_id = str(row.get("query_id") or "").strip()
+                if query_id:
+                    query_meta[query_id] = dict(row)
+
+        rows: list[dict] = []
+        with documents_path.open(newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                query_id = str(row.get("query_id") or "").strip()
+                meta = query_meta.get(query_id, {})
+                url = str(row.get("url") or "").strip()
+                if not url:
+                    continue
+                rows.append({
+                    "title": row.get("title") or "Untitled result",
+                    "url": url,
+                    "snippet": row.get("snippet") or "",
+                    "source": row.get("source") or urlparse(url).netloc,
+                    "source_type": row.get("source_type") or "",
+                    "date": row.get("year") or None,
+                    "year": _as_int(row.get("year")),
+                    "is_pdf": _as_bool(row.get("is_pdf")),
+                    "document_type": row.get("document_type") or "",
+                    "query_id": query_id,
+                    "benchmark_query": meta.get("query") or "",
+                    "benchmark_topic": meta.get("topic") or "",
+                    "benchmark_industry": meta.get("industry") or "",
+                    "retrieved_rank": _as_int(row.get("retrieved_rank")) or 99,
+                })
+        return rows
+    except OSError:
+        return []
+
+
 def _normalize_result(item: dict) -> dict:
     """Normalize one raw search result to the internal schema."""
     url = str(item.get("url") or "")
@@ -167,7 +240,13 @@ def _query_terms(query: str) -> set[str]:
 def _keyword_overlap_score(result: dict, query: str) -> int:
     """Score a result by topic-word overlap for stable local ranking."""
     query_terms = _query_terms(query)
-    text = f"{result.get('title', '')} {result.get('snippet', '')}".lower()
+    text = (
+        f"{result.get('title', '')} "
+        f"{result.get('snippet', '')} "
+        f"{result.get('benchmark_query', '')} "
+        f"{result.get('benchmark_topic', '')} "
+        f"{result.get('benchmark_industry', '')}"
+    ).lower()
     return sum(1 for term in query_terms if term in text)
 
 
@@ -189,8 +268,31 @@ def _deduplicate_by_url(results: list[dict]) -> list[dict]:
 def _rank_results(results: list[dict], query: str, count: int) -> list[dict]:
     """Deduplicate, rank by keyword overlap, and trim to the requested size."""
     unique_results = _deduplicate_by_url(results)
-    unique_results.sort(key=lambda item: _keyword_overlap_score(item, query), reverse=True)
+    unique_results.sort(
+        key=lambda item: (
+            _keyword_overlap_score(item, query),
+            _result_quality_prior(item),
+            -int(item.get("retrieved_rank", 99) or 99),
+        ),
+        reverse=True,
+    )
     return unique_results[:count]
+
+
+def _result_quality_prior(result: dict) -> float:
+    """Prefer report-like curated/API results when keyword overlap ties."""
+    document_type = str(result.get("document_type") or "").strip().lower()
+    source_type = str(result.get("source_type") or "").strip().lower()
+    score = 0.0
+    if result.get("is_pdf"):
+        score += 0.25
+    if document_type in {"research_report", "report", "whitepaper", "archived_pdf"}:
+        score += 0.35
+    if document_type in {"landing_page", "news_article"}:
+        score -= 0.20
+    if source_type in {"intergovernmental", "government", "academic", "research_provider", "consulting"}:
+        score += 0.25
+    return score
 
 
 def _mock_search_reports(query: str, count: int = 10) -> list[dict]:
@@ -208,6 +310,25 @@ def _mock_search_reports(query: str, count: int = 10) -> list[dict]:
     return [doc for _, doc in scored_results[:count]]
 
 
+def _curated_search_reports(query: str, count: int = 10) -> list[dict]:
+    """Search the curated benchmark rows by keyword overlap."""
+    scored_results: list[tuple[int, float, dict]] = []
+    for row in _curated_rows():
+        overlap = _keyword_overlap_score(row, query)
+        if overlap > 0:
+            scored_results.append((overlap, _result_quality_prior(row), row))
+
+    scored_results.sort(
+        key=lambda item: (
+            item[0],
+            item[1],
+            -int(item[2].get("retrieved_rank", 99) or 99),
+        ),
+        reverse=True,
+    )
+    return [row for _, _, row in scored_results[:count]]
+
+
 def search_once(query: str, count: int = 10) -> list[dict]:
     """Call the live search API once and return normalized results."""
     expanded_query = expand_query(query)
@@ -223,17 +344,42 @@ def search_once(query: str, count: int = 10) -> list[dict]:
     return _rank_results(normalized_results, query, count)
 
 
-def search_reports(query: str, count: int = 10, use_api: bool = True) -> list[dict]:
+def search_reports(
+    query: str,
+    count: int = 10,
+    use_api: bool = True,
+    *,
+    topic: str | None = None,
+    year_terms: str | None = None,
+) -> list[dict]:
     """Retrieve candidate reports using live search first, then local fallback."""
-    if use_api:
-        api_results = search_once(query, count=count)
-        if api_results:
-            return api_results
-        print("[search] Falling back to local mock data after API failure.")
-
-    query_variants = [expand_query(query), *generate_queries(query)]
+    if topic is None:
+        topic = _base_topic(query)
+    if year_terms is None:
+        year_terms = _year_terms(query)
+    query_variants = [expand_query(query), *generate_queries(query, topic=topic, year_terms=year_terms)]
+    query_variants = list(dict.fromkeys(item for item in query_variants if item))
     aggregated_results: list[dict] = []
+
+    if use_api:
+        if not os.environ.get("SERPAPI_API_KEY"):
+            print("[search] SERPAPI_API_KEY is not set; using curated/local fallback.")
+        else:
+            for search_query in query_variants[:4]:
+                api_results = search_once(search_query, count=count)
+                aggregated_results.extend(api_results)
+                if len(_deduplicate_by_url(aggregated_results)) >= count:
+                    break
+            if aggregated_results:
+                ranked_api_results = _rank_results(aggregated_results, query, count)
+                if len(ranked_api_results) >= min(5, count):
+                    return ranked_api_results
+                print("[search] Live API returned few candidates; supplementing with curated/local fallback.")
+            else:
+                print("[search] Falling back to curated/local data after API failure.")
+
     for search_query in query_variants:
+        aggregated_results.extend(_curated_search_reports(search_query, count=count))
         aggregated_results.extend(_mock_search_reports(search_query, count=count))
 
     ranked_results = _rank_results(aggregated_results, query, count)

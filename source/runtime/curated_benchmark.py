@@ -55,7 +55,6 @@ DOCUMENT_FIELDS = [
 RETRIEVAL_FIELDS = [
     "query_id",
     "doc_id",
-    "relevance_label",
     "result_class",
     "ranking_preference",
     "rationale",
@@ -63,14 +62,17 @@ RETRIEVAL_FIELDS = [
 
 QUALITY_FIELDS = [
     "doc_id",
-    "report_validity_label",
-    "deer_method_label",
-    "deer_evidence_label",
-    "deer_transparency_label",
-    "deer_recency_label",
-    "authority_label",
-    "verification_support_label",
-    "overall_quality_label",
+    "relevance_score",
+    "report_validity_score",
+    "methodology_score",
+    "citation_score",
+    "consistency_score",
+    "structure_score",
+    "data_density",
+    "claim_density",
+    "quality_score",
+    "authority_score",
+    "ideal_final_score",
     "rationale",
 ]
 
@@ -92,10 +94,34 @@ SOURCE_TYPE_AUTHORITY: dict[str, float] = {
 
 DOCUMENT_TYPE_VALIDITY: dict[str, float] = {
     "research_report": 0.95,
-    "whitepaper": 0.68,
+    "whitepaper": 0.65,
     "archived_pdf": 0.55,
-    "news_article": 0.20,
-    "landing_page": 0.10,
+    "news_article": 0.12,
+    "landing_page": 0.08,
+}
+
+DOCUMENT_TYPE_STRUCTURE: dict[str, float] = {
+    "research_report": 0.88,
+    "whitepaper": 0.55,
+    "archived_pdf": 0.60,
+    "news_article": 0.08,
+    "landing_page": 0.05,
+}
+
+QUALITY_WEIGHTS: dict[str, float] = {
+    "methodology_score": 0.22,
+    "citation_score": 0.22,
+    "consistency_score": 0.18,
+    "structure_score": 0.14,
+    "data_density": 0.14,
+    "claim_density": 0.10,
+}
+
+FINAL_SCORE_WEIGHTS: dict[str, float] = {
+    "relevance_score": 0.35,
+    "report_validity_score": 0.20,
+    "quality_score": 0.30,
+    "authority_score": 0.15,
 }
 
 
@@ -166,6 +192,57 @@ def _candidate_templates(seed: QuerySeed) -> list[dict[str, Any]]:
     old_year = max(2018, seed.year_min - 5)
     slug = _slug(seed.topic)
 
+    strong_auth = SOURCE_TYPE_AUTHORITY.get(seed.strong_source_type, 0.35)
+    partial_auth = SOURCE_TYPE_AUTHORITY.get(seed.partial_source_type, 0.35)
+    news_auth = SOURCE_TYPE_AUTHORITY.get("news_media", 0.55)
+    unknown_auth = SOURCE_TYPE_AUTHORITY.get("unknown", 0.35)
+
+    def _qscore(doc_type: str, m: float, c: float, cons: float, dd: float, cd: float) -> float:
+        s = DOCUMENT_TYPE_STRUCTURE.get(doc_type, 0.10)
+        return round(
+            QUALITY_WEIGHTS["methodology_score"] * m
+            + QUALITY_WEIGHTS["citation_score"] * c
+            + QUALITY_WEIGHTS["consistency_score"] * cons
+            + QUALITY_WEIGHTS["structure_score"] * s
+            + QUALITY_WEIGHTS["data_density"] * dd
+            + QUALITY_WEIGHTS["claim_density"] * cd,
+            4,
+        )
+
+    def _ideal(rel: float, valid: float, quality: float, auth: float) -> float:
+        return round(
+            FINAL_SCORE_WEIGHTS["relevance_score"] * rel
+            + FINAL_SCORE_WEIGHTS["report_validity_score"] * valid
+            + FINAL_SCORE_WEIGHTS["quality_score"] * quality
+            + FINAL_SCORE_WEIGHTS["authority_score"] * auth,
+            4,
+        )
+
+    rr_rel, rr_valid = 0.92, DOCUMENT_TYPE_VALIDITY.get("research_report", 0.95)
+    rr_m, rr_c, rr_cons, rr_dd, rr_cd = 0.88, 0.90, 0.85, 0.88, 0.75
+    rr_s = DOCUMENT_TYPE_STRUCTURE.get("research_report", 0.88)
+    rr_q = _qscore("research_report", rr_m, rr_c, rr_cons, rr_dd, rr_cd)
+
+    wp_rel, wp_valid = 0.70, DOCUMENT_TYPE_VALIDITY.get("whitepaper", 0.65)
+    wp_m, wp_c, wp_cons, wp_dd, wp_cd = 0.40, 0.45, 0.55, 0.50, 0.40
+    wp_s = DOCUMENT_TYPE_STRUCTURE.get("whitepaper", 0.55)
+    wp_q = _qscore("whitepaper", wp_m, wp_c, wp_cons, wp_dd, wp_cd)
+
+    lp_rel, lp_valid = 0.30, DOCUMENT_TYPE_VALIDITY.get("landing_page", 0.08)
+    lp_m, lp_c, lp_cons, lp_dd, lp_cd = 0.05, 0.05, 0.10, 0.08, 0.25
+    lp_s = DOCUMENT_TYPE_STRUCTURE.get("landing_page", 0.05)
+    lp_q = _qscore("landing_page", lp_m, lp_c, lp_cons, lp_dd, lp_cd)
+
+    na_rel, na_valid = 0.25, DOCUMENT_TYPE_VALIDITY.get("news_article", 0.12)
+    na_m, na_c, na_cons, na_dd, na_cd = 0.05, 0.10, 0.20, 0.15, 0.20
+    na_s = DOCUMENT_TYPE_STRUCTURE.get("news_article", 0.08)
+    na_q = _qscore("news_article", na_m, na_c, na_cons, na_dd, na_cd)
+
+    ap_rel, ap_valid = 0.45, DOCUMENT_TYPE_VALIDITY.get("archived_pdf", 0.55)
+    ap_m, ap_c, ap_cons, ap_dd, ap_cd = 0.50, 0.45, 0.55, 0.40, 0.35
+    ap_s = DOCUMENT_TYPE_STRUCTURE.get("archived_pdf", 0.60)
+    ap_q = _qscore("archived_pdf", ap_m, ap_c, ap_cons, ap_dd, ap_cd)
+
     return [
         {
             "title": f"{topic_title} Outlook {year}: Benchmark Report",
@@ -176,19 +253,21 @@ def _candidate_templates(seed: QuerySeed) -> list[dict[str, Any]]:
             "is_pdf": "true",
             "path": f"{slug}/benchmark-report-{year}.pdf",
             "snippet": f"Full report with methodology, survey sample, references, charts, and forecasts for {seed.topic}.",
-            "relevance_label": 3,
             "result_class": "good_report",
             "ranking_preference": 1,
-            "report_validity_label": 3,
-            "deer_method_label": 3,
-            "deer_evidence_label": 3,
-            "deer_transparency_label": 3,
-            "deer_recency_label": 3,
-            "authority_label": 3,
-            "verification_support_label": 3,
-            "overall_quality_label": 3,
+            "relevance_score": rr_rel,
+            "report_validity_score": rr_valid,
+            "methodology_score": rr_m,
+            "citation_score": rr_c,
+            "consistency_score": rr_cons,
+            "structure_score": rr_s,
+            "data_density": rr_dd,
+            "claim_density": rr_cd,
+            "quality_score": rr_q,
+            "authority_score": strong_auth,
+            "ideal_final_score": _ideal(rr_rel, rr_valid, rr_q, strong_auth),
             "retrieval_rationale": "Directly matches the query topic and looks like a full, current report.",
-            "quality_rationale": "Strong compressed DEER signals: method, evidence, transparency, and recency are all present.",
+            "quality_rationale": "High float scores: strong methodology, citation density, and source authority.",
         },
         {
             "title": f"{topic_title} Market Update {seed.year_min}",
@@ -199,19 +278,21 @@ def _candidate_templates(seed: QuerySeed) -> list[dict[str, Any]]:
             "is_pdf": "true",
             "path": f"{slug}/market-update-{seed.year_min}.pdf",
             "snippet": f"Short whitepaper summarizing {seed.topic} trends with selected statistics and limited source notes.",
-            "relevance_label": 2,
             "result_class": "mediocre_report",
             "ranking_preference": 2,
-            "report_validity_label": 2,
-            "deer_method_label": 1,
-            "deer_evidence_label": 2,
-            "deer_transparency_label": 1,
-            "deer_recency_label": 2,
-            "authority_label": 1,
-            "verification_support_label": 2,
-            "overall_quality_label": 2,
+            "relevance_score": wp_rel,
+            "report_validity_score": wp_valid,
+            "methodology_score": wp_m,
+            "citation_score": wp_c,
+            "consistency_score": wp_cons,
+            "structure_score": wp_s,
+            "data_density": wp_dd,
+            "claim_density": wp_cd,
+            "quality_score": wp_q,
+            "authority_score": partial_auth,
+            "ideal_final_score": _ideal(wp_rel, wp_valid, wp_q, partial_auth),
             "retrieval_rationale": "Relevant and report-like, but weaker source authority and thinner methodology.",
-            "quality_rationale": "Some evidence is present, but method and transparency are limited.",
+            "quality_rationale": "Moderate scores: some evidence and citations present, but method and authority are limited.",
         },
         {
             "title": f"{topic_title}: What Buyers Need to Know",
@@ -222,22 +303,24 @@ def _candidate_templates(seed: QuerySeed) -> list[dict[str, Any]]:
             "is_pdf": "false",
             "path": f"{slug}/buyers-guide",
             "snippet": f"Promotional overview using {seed.topic} keywords, a lead form, and product claims without references.",
-            "relevance_label": 1,
             "result_class": "weak_page",
             "ranking_preference": 4,
-            "report_validity_label": 0,
-            "deer_method_label": 0,
-            "deer_evidence_label": 0,
-            "deer_transparency_label": 0,
-            "deer_recency_label": 3,
-            "authority_label": 1,
-            "verification_support_label": 0,
-            "overall_quality_label": 0,
+            "relevance_score": lp_rel,
+            "report_validity_score": lp_valid,
+            "methodology_score": lp_m,
+            "citation_score": lp_c,
+            "consistency_score": lp_cons,
+            "structure_score": lp_s,
+            "data_density": lp_dd,
+            "claim_density": lp_cd,
+            "quality_score": lp_q,
+            "authority_score": partial_auth,
+            "ideal_final_score": _ideal(lp_rel, lp_valid, lp_q, partial_auth),
             "retrieval_rationale": "Contains query terms but is a marketing page rather than a report.",
-            "quality_rationale": "No visible method, source support, or verification-friendly evidence.",
+            "quality_rationale": "Low float scores: no visible method, source support, or verifiable evidence.",
         },
         {
-            "title": f"Breaking News: Investment Surges Across Adjacent Markets",
+            "title": "Breaking News: Investment Surges Across Adjacent Markets",
             "source": "Market Daily News",
             "source_type": "news_media",
             "year": year,
@@ -245,19 +328,21 @@ def _candidate_templates(seed: QuerySeed) -> list[dict[str, Any]]:
             "is_pdf": "false",
             "path": f"{slug}/adjacent-market-news",
             "snippet": f"News article with one mention of {seed.topic}, focused mostly on quarterly earnings and executive quotes.",
-            "relevance_label": 1,
             "result_class": "false_positive",
             "ranking_preference": 5,
-            "report_validity_label": 0,
-            "deer_method_label": 0,
-            "deer_evidence_label": 1,
-            "deer_transparency_label": 0,
-            "deer_recency_label": 3,
-            "authority_label": 1,
-            "verification_support_label": 1,
-            "overall_quality_label": 1,
+            "relevance_score": na_rel,
+            "report_validity_score": na_valid,
+            "methodology_score": na_m,
+            "citation_score": na_c,
+            "consistency_score": na_cons,
+            "structure_score": na_s,
+            "data_density": na_dd,
+            "claim_density": na_cd,
+            "quality_score": na_q,
+            "authority_score": news_auth,
+            "ideal_final_score": _ideal(na_rel, na_valid, na_q, news_auth),
             "retrieval_rationale": "Topical overlap is shallow and the page is not a research report.",
-            "quality_rationale": "Recent but not methodical; evidence is mostly quotations rather than report support.",
+            "quality_rationale": "Recent but not methodical; evidence is mostly quotations without systematic data.",
         },
         {
             "title": f"{topic_title} Historical Overview {old_year}",
@@ -268,19 +353,21 @@ def _candidate_templates(seed: QuerySeed) -> list[dict[str, Any]]:
             "is_pdf": "true",
             "path": f"{slug}/historical-overview-{old_year}.pdf",
             "snippet": f"Older PDF that mentions {seed.topic} but predates the target period and lacks current forecasts.",
-            "relevance_label": 1,
             "result_class": "stale_report",
             "ranking_preference": 3,
-            "report_validity_label": 2,
-            "deer_method_label": 1,
-            "deer_evidence_label": 1,
-            "deer_transparency_label": 1,
-            "deer_recency_label": 0,
-            "authority_label": 1,
-            "verification_support_label": 1,
-            "overall_quality_label": 1,
+            "relevance_score": ap_rel,
+            "report_validity_score": ap_valid,
+            "methodology_score": ap_m,
+            "citation_score": ap_c,
+            "consistency_score": ap_cons,
+            "structure_score": ap_s,
+            "data_density": ap_dd,
+            "claim_density": ap_cd,
+            "quality_score": ap_q,
+            "authority_score": unknown_auth,
+            "ideal_final_score": _ideal(ap_rel, ap_valid, ap_q, unknown_auth),
             "retrieval_rationale": "Report-like but stale for a recent benchmark query.",
-            "quality_rationale": "Some structure exists, but weak recency makes it poor for current verification.",
+            "quality_rationale": "Moderate structure but weak recency; relevance capped due to archived type.",
         },
     ]
 
@@ -313,7 +400,6 @@ def build_documents_and_annotations() -> tuple[list[dict[str, Any]], list[dict[s
                 {
                     "query_id": seed.query_id,
                     "doc_id": doc_id,
-                    "relevance_label": candidate["relevance_label"],
                     "result_class": candidate["result_class"],
                     "ranking_preference": candidate["ranking_preference"],
                     "rationale": candidate["retrieval_rationale"],
@@ -322,14 +408,17 @@ def build_documents_and_annotations() -> tuple[list[dict[str, Any]], list[dict[s
             quality_annotations.append(
                 {
                     "doc_id": doc_id,
-                    "report_validity_label": candidate["report_validity_label"],
-                    "deer_method_label": candidate["deer_method_label"],
-                    "deer_evidence_label": candidate["deer_evidence_label"],
-                    "deer_transparency_label": candidate["deer_transparency_label"],
-                    "deer_recency_label": candidate["deer_recency_label"],
-                    "authority_label": candidate["authority_label"],
-                    "verification_support_label": candidate["verification_support_label"],
-                    "overall_quality_label": candidate["overall_quality_label"],
+                    "relevance_score": candidate["relevance_score"],
+                    "report_validity_score": candidate["report_validity_score"],
+                    "methodology_score": candidate["methodology_score"],
+                    "citation_score": candidate["citation_score"],
+                    "consistency_score": candidate["consistency_score"],
+                    "structure_score": candidate["structure_score"],
+                    "data_density": candidate["data_density"],
+                    "claim_density": candidate["claim_density"],
+                    "quality_score": candidate["quality_score"],
+                    "authority_score": candidate["authority_score"],
+                    "ideal_final_score": candidate["ideal_final_score"],
                     "rationale": candidate["quality_rationale"],
                 }
             )
@@ -533,28 +622,12 @@ def _pairwise_accuracy(ranked_doc_ids: list[str], preference_by_doc: dict[str, i
     return correct / checked if checked else 0.0
 
 
-def _quality_target(quality_row: dict[str, str]) -> float:
-    fields = [
-        "report_validity_label",
-        "deer_method_label",
-        "deer_evidence_label",
-        "deer_transparency_label",
-        "authority_label",
-        "verification_support_label",
-        "overall_quality_label",
-    ]
-    values = [_to_float(quality_row.get(field)) for field in fields]
-    return sum(values) / len(values) if values else 0.0
-
-
 def _combined_label(
     doc_id: str,
     retrieval_by_doc: dict[str, dict[str, str]],
     quality_by_doc: dict[str, dict[str, str]],
 ) -> float:
-    relevance = _to_float(retrieval_by_doc[doc_id].get("relevance_label"))
-    quality = _quality_target(quality_by_doc[doc_id])
-    return 0.60 * relevance + 0.40 * quality
+    return _to_float(quality_by_doc[doc_id].get("ideal_final_score", 0.0))
 
 
 def evaluate_weight_set(
@@ -585,7 +658,7 @@ def evaluate_weight_set(
         )
         doc_ids = [str(row["doc_id"]) for row in sorted_rows]
         labels = [_combined_label(doc_id, retrieval_by_doc, quality_by_doc) for doc_id in doc_ids]
-        relevant_flags = [1.0 if _to_float(retrieval_by_doc[doc_id]["relevance_label"]) >= 2 else 0.0 for doc_id in doc_ids[:k]]
+        relevant_flags = [1.0 if _to_float(quality_by_doc[doc_id].get("relevance_score")) >= 0.60 else 0.0 for doc_id in doc_ids[:k]]
         preference_by_doc = {
             doc_id: _to_int(retrieval_by_doc[doc_id]["ranking_preference"])
             for doc_id in doc_ids
@@ -761,25 +834,32 @@ def validate_dataset(dataset_dir: Path = DEFAULT_OUTPUT_DIR) -> list[str]:
     for row in retrieval:
         if row["query_id"] not in query_id_set:
             errors.append(f"Retrieval annotation references unknown query_id {row['query_id']}")
-        if not _int_in_range(row["relevance_label"], 0, 3):
-            errors.append(f"Retrieval label for {row['doc_id']} must be in 0..3")
         if not _int_in_range(row["ranking_preference"], 1, 5):
             errors.append(f"Ranking preference for {row['doc_id']} must be in 1..5")
 
-    quality_label_fields = [
-        "report_validity_label",
-        "deer_method_label",
-        "deer_evidence_label",
-        "deer_transparency_label",
-        "deer_recency_label",
-        "authority_label",
-        "verification_support_label",
-        "overall_quality_label",
+    quality_float_fields = [
+        "relevance_score",
+        "report_validity_score",
+        "methodology_score",
+        "citation_score",
+        "consistency_score",
+        "structure_score",
+        "data_density",
+        "claim_density",
+        "quality_score",
+        "authority_score",
+        "ideal_final_score",
     ]
     for row in quality:
-        for field in quality_label_fields:
-            if not _int_in_range(row[field], 0, 3):
-                errors.append(f"{field} for {row['doc_id']} must be in 0..3")
+        for field in quality_float_fields:
+            raw = row.get(field, "")
+            try:
+                val = float(raw)
+            except (TypeError, ValueError):
+                errors.append(f"{field} for {row['doc_id']} is not a valid float: {raw!r}")
+                continue
+            if not (0.0 <= val <= 1.0):
+                errors.append(f"{field} for {row['doc_id']} must be in [0.0, 1.0], got {val}")
 
     return errors
 
@@ -789,43 +869,43 @@ def build_schema_readme() -> str:
     return """# Curated Report Verification Benchmark
 
 This folder contains a small synthetic benchmark for an AI-assisted report search and evaluation agent.
-It is designed for a capstone project: small enough to inspect manually, structured enough to evaluate retrieval, ranking, report quality, and lightweight verification behavior.
+It is designed for a capstone project: small enough to inspect manually, structured enough to evaluate retrieval, ranking, and scoring coefficient tuning.
 
 ## Files
 
 - `queries.csv`: representative user queries for report discovery.
-- `documents.csv`: five retrieved candidate documents per query. This file contains retrieval metadata only, not quality labels.
-- `retrieval_annotations.csv`: query-document relevance labels and result classes.
-- `quality_annotations.csv`: document-level report quality labels using compressed DEER-inspired dimensions.
+- `documents.csv`: five retrieved candidate documents per query. Contains retrieval metadata only, not quality labels.
+- `retrieval_annotations.csv`: query-document result classes and ranking preferences.
+- `quality_annotations.csv`: document-level float scores aligned with the system's final score formula.
 
-## Label Scale
+## Score Schema
 
-All quality and relevance labels use the same interpretable 0-3 scale:
+All quality scores are continuous floats in [0.0, 1.0] — the same scale as `source/scoring.py` sub-scores.
 
-- `0`: absent, poor, or not useful
-- `1`: weak
-- `2`: acceptable
-- `3`: strong
+### quality_annotations.csv columns
 
-`ranking_preference` uses `1` for the best candidate within a query and `5` for the weakest.
+- `relevance_score`: query-document topical relevance (0.0 = unrelated, 1.0 = exact match).
+- `report_validity_score`: heuristic from document_type (research_report=0.95, whitepaper=0.65, archived_pdf=0.55, news_article=0.12, landing_page=0.08).
+- `methodology_score`: whether the document describes method, sample size, or analytical approach.
+- `citation_score`: whether claims are supported by data references, charts, or footnotes.
+- `consistency_score`: whether data and statements are internally coherent without contradictions.
+- `structure_score`: heuristic from document_type (research_report=0.88, whitepaper=0.55, archived_pdf=0.60, news_article=0.08, landing_page=0.05).
+- `data_density`: proportion of content that is numeric or empirical data rather than prose.
+- `claim_density`: proportion of verifiable claims per paragraph.
+- `quality_score`: computed as `0.22*methodology + 0.22*citation + 0.18*consistency + 0.14*structure + 0.14*data_density + 0.10*claim_density`.
+- `authority_score`: heuristic from source_type (government=0.95, intergovernmental=0.93, academic=0.90, consulting=0.75, vendor=0.38, unknown=0.35).
+- `ideal_final_score`: ground truth for coefficient tuning, computed as `0.35*relevance + 0.20*report_validity + 0.30*quality + 0.15*authority`.
 
-## Compressed DEER-Inspired Dimensions
+### retrieval_annotations.csv columns
 
-DEER is used only as an expert-informed annotation framework. The benchmark compresses it into four practical dimensions:
-
-- `deer_method_label`: whether the document explains method, sample, scope, or analytical approach.
-- `deer_evidence_label`: whether claims are supported by data, references, charts, or source notes.
-- `deer_transparency_label`: whether assumptions, definitions, limitations, or sources are visible.
-- `deer_recency_label`: whether the document is current enough for the query.
-
-The dataset intentionally does not copy the full DEER rubric.
+- `result_class`: one of `good_report`, `mediocre_report`, `weak_page`, `false_positive`, `stale_report`.
+- `ranking_preference`: integer 1 (best) to 5 (worst) within a query.
 
 ## Intended Uses
 
-- Retrieval evaluation: did the agent find report-like candidates?
 - Ranking evaluation: did strong reports rank above weak pages and false positives?
-- Quality scoring calibration: do scoring coefficients align with human-readable labels?
-- Verification support evaluation: does the selected report expose enough evidence for lightweight claim checks?
+- Coefficient tuning: use `ideal_final_score` as the NDCG label target to find the best `FINAL_WEIGHTS` via grid search.
+- Quality calibration: do individual sub-scores align with document type and source authority expectations?
 
 ## Synthetic Data Note
 

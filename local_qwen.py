@@ -114,7 +114,15 @@ def _candidate_model_paths() -> list[Path]:
 def _ensure_ml_stack() -> tuple[Any, Any, Any] | None:
     """Import Torch/Transformers, reusing other local virtualenvs when needed."""
     try:
+        os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
         import torch  # type: ignore
+        import transformers.utils as transformers_utils  # type: ignore
+        import transformers.utils.import_utils as transformers_import_utils  # type: ignore
+        transformers_utils.is_torchvision_available = lambda: False
+        transformers_import_utils.is_torchvision_available = lambda: False
+        transformers_import_utils.is_torchvision_v2_available = lambda: False
+        if hasattr(transformers_import_utils, "_torchvision_available"):
+            transformers_import_utils._torchvision_available = False
         from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
         return torch, AutoModelForCausalLM, AutoTokenizer
     except Exception:
@@ -123,7 +131,15 @@ def _ensure_ml_stack() -> tuple[Any, Any, Any] | None:
             if site_packages_str not in sys.path:
                 sys.path.append(site_packages_str)
         try:
+            os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
             import torch  # type: ignore
+            import transformers.utils as transformers_utils  # type: ignore
+            import transformers.utils.import_utils as transformers_import_utils  # type: ignore
+            transformers_utils.is_torchvision_available = lambda: False
+            transformers_import_utils.is_torchvision_available = lambda: False
+            transformers_import_utils.is_torchvision_v2_available = lambda: False
+            if hasattr(transformers_import_utils, "_torchvision_available"):
+                transformers_import_utils._torchvision_available = False
             from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
             return torch, AutoModelForCausalLM, AutoTokenizer
         except Exception:
@@ -160,12 +176,23 @@ def _load_model() -> tuple[Any, Any, Any] | None:
         local_files_only=True,
         trust_remote_code=True,
     )
-    model = AutoModelForCausalLM.from_pretrained(
-        str(model_path),
-        local_files_only=True,
-        trust_remote_code=True,
-        dtype=torch.float32,
-    )
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    load_kwargs: dict[str, Any] = {
+        "local_files_only": True,
+        "trust_remote_code": True,
+    }
+    if device == "cuda":
+        try:
+            from transformers import BitsAndBytesConfig  # type: ignore
+            load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True)
+            load_kwargs["device_map"] = "auto"
+        except Exception:
+            load_kwargs["torch_dtype"] = torch.float16
+            load_kwargs["device_map"] = "auto"
+    else:
+        load_kwargs["torch_dtype"] = torch.float32
+
+    model = AutoModelForCausalLM.from_pretrained(str(model_path), **load_kwargs)
     model.eval()
     return tokenizer, model, torch
 
@@ -205,6 +232,12 @@ def _generate(
         )
 
     inputs = tokenizer(rendered_prompt, return_tensors="pt", truncation=True, max_length=2048)
+    # Move inputs to the same device as the model
+    try:
+        model_device = next(model.parameters()).device
+        inputs = {k: v.to(model_device) for k, v in inputs.items()}
+    except Exception:
+        pass
     generation_config = getattr(model, "generation_config", None)
     if generation_config is not None:
         generation_config = copy.deepcopy(generation_config)

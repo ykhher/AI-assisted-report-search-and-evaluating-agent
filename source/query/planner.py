@@ -15,44 +15,9 @@ Example:
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-
-_YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
-
-_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "best",
-    "benchmark",
-    "credible",
-    "current",
-    "discover",
-    "find",
-    "for",
-    "get",
-    "high",
-    "industry",
-    "latest",
-    "market",
-    "me",
-    "most",
-    "need",
-    "of",
-    "on",
-    "recent",
-    "report",
-    "reports",
-    "research",
-    "show",
-    "strong",
-    "survey",
-    "the",
-    "top",
-    "with",
-}
+from source.query.handler import _base_topic, _extract_years, _normalize_query_text
 
 _QUALITY_HINTS = {
     "best",
@@ -86,33 +51,6 @@ _RANKING_HINTS = {
     "most credible",
     "highest quality",
 }
-
-
-def _normalize_query(user_query: str) -> str:
-    """Collapse whitespace and lowercase the query for stable matching."""
-    return " ".join(str(user_query or "").strip().lower().split())
-
-
-def _extract_year_constraint(query: str) -> int | None:
-    """Return an explicit year if the user mentions one."""
-    match = _YEAR_PATTERN.search(query)
-    if not match:
-        return None
-    return int(match.group(0))
-
-
-def _extract_topic(query: str) -> str:
-    """Infer the main topic by removing broad search-intent boilerplate.
-    """
-    cleaned = _YEAR_PATTERN.sub(" ", query)
-    tokens = re.findall(r"[a-z0-9]+", cleaned)
-    topic_tokens = [token for token in tokens if token not in _STOPWORDS]
-
-    if topic_tokens:
-        return " ".join(topic_tokens)
-
-    # Fall back to the cleaned query if the stopword filter was too aggressive.
-    return cleaned.strip() or "industry report"
 
 
 def _infer_preferred_report_types(query: str) -> list[str]:
@@ -165,8 +103,6 @@ def _build_steps(
         "filter_reports",
     ]
 
-    # If the user is asking for quality or specific report formats, fetch and
-    # parse earlier so later scoring has richer evidence.
     if quality_priority or len(preferred_report_types) > 1:
         steps.extend(["fetch_top_docs", "parse_docs"])
 
@@ -193,15 +129,16 @@ def make_plan(user_query: str) -> dict[str, Any]:
     - infer preferred report formats such as benchmark or survey
     - choose a suggested execution sequence for downstream tools
     """
-    normalized_query = _normalize_query(user_query)
-    year_constraint = _extract_year_constraint(normalized_query)
+    normalized_query = _normalize_query_text(user_query)
+    years = _extract_years(normalized_query)
+    year_constraint = years[0] if years else None
     quality_priority = _wants_quality_priority(normalized_query)
     recency_priority = _wants_recency_priority(normalized_query, year_constraint)
     preferred_report_types = _infer_preferred_report_types(normalized_query)
 
     plan: dict[str, Any] = {
         "task_type": _infer_task_type(normalized_query),
-        "topic": _extract_topic(normalized_query),
+        "topic": _base_topic(normalized_query) or "industry report",
         "year_constraint": year_constraint,
         "quality_priority": quality_priority,
         "recency_priority": recency_priority,

@@ -157,21 +157,6 @@ def institution_score(text: str) -> float:
     return round(min(count / 10, 1.0), 3)
 
 
-def in_text_citation_score(text: str) -> float:
-    """Backward-compatible wrapper for inline citation detection."""
-    return footnote_score(text)
-
-
-def reference_section_score(text: str) -> float:
-    """Backward-compatible wrapper for bottom reference detection."""
-    return bottom_reference_score(text)
-
-
-def numbered_reference_score(text: str) -> float:
-    """Backward-compatible wrapper for numbered reference detection."""
-    return bottom_reference_score(text)
-
-
 def compute_citation_score(text: str) -> float:
     """Combine consulting-style citation signals into one robust credibility feature."""
     citation_score = max(bottom_reference_score(text), footnote_score(text))

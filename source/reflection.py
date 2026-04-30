@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from source.agent_state import AgentState, CandidateRecord
 
 
-MIN_USABLE_CANDIDATES = 3
+MIN_USABLE_CANDIDATES = 5
 GOOD_TOP_SCORE = 0.70
 GOOD_AVG_SCORE = 0.62
 MIN_RELEVANCE = 0.35

@@ -1,0 +1,40 @@
+{
+  "run_date": "2026-04-29",
+  "model": "Qwen2.5-7B-Instruct (4-bit, GPU)",
+  "n_documents": 100,
+  "n_scored": 100,
+  "label_source": "holistic LLM oracle, continuous prompt (no anchor values)",
+  "text_source": "real web-fetched text via DuckDuckGo + document_fetcher",
+  "current_weights": {
+    "methodology": 0.22,
+    "citation": 0.22,
+    "consistency": 0.18,
+    "structure": 0.14,
+    "data_density": 0.14,
+    "claim_density": 0.10
+  },
+  "tuned_weights": {
+    "methodology": 0.0000,
+    "citation": 0.0622,
+    "consistency": 0.1310,
+    "structure": 0.4548,
+    "data_density": 0.0787,
+    "claim_density": 0.2733
+  },
+  "applied_weights": {
+    "methodology": 0.100,
+    "citation": 0.062,
+    "consistency": 0.131,
+    "structure": 0.355,
+    "data_density": 0.079,
+    "claim_density": 0.273
+  },
+  "metrics": {
+    "mse_current": 0.075316,
+    "mse_tuned": 0.048273,
+    "mse_improvement_pct": 35.9,
+    "r2_current": -1.0070,
+    "r2_tuned": -0.2864
+  },
+  "notes": "Applied 2026-04-30. Tuned weights adjusted before applying: methodology floor raised to 0.10 (from 0.00) with the 0.10 transferred from structure (0.4548 → 0.3548). All other tuned weights kept as-is. Sum = 1.0."
+}

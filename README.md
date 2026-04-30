@@ -1,6 +1,6 @@
 # Industry Report Discovery Agent
 
-An agent for finding, filtering, scoring, and verifying industry and research reports. Given a user query, it searches the web, classifies candidates, scores quality across interpretable dimensions, verifies claims, and returns a ranked list with explanations.
+An agent for finding, filtering, scoring, and verifying industry and research reports. Given a user query, it searches the web via SerpApi, classifies candidates, scores quality across interpretable dimensions, verifies claims, and returns a ranked list with explanations.
 
 ## What It Does
 
@@ -25,7 +25,7 @@ The verification layer is intentionally lightweight and LLM-free. It checks loca
 
 ```text
 User query
-  → planner
+  → query planner
   → agent state
   → controller loop
       → search / fetch / parse / classify / score / rank
@@ -44,55 +44,66 @@ Reflection diagnoses failures such as topic drift, weak quality signals, too few
 ```text
 agent/
   main.py                         entry point (wraps source/main.py)
-  README.md
-  requirements.txt
   local_qwen.py                   optional local Qwen integration
+  .env                            API keys (not committed)
+  requirements.txt
+  README.md
   source/
     main.py                       CLI runner
-    agent.py                      agent loop
-    controller.py                 controller and replan logic
-    planner.py                    structured query planning
-    agent_state.py                shared agent state
+    agent.py                      orchestration entrypoints
+    controller.py                 LLM-guided controller loop and replan logic
+    agent_state.py                shared agent state and candidate records
     tool_registry.py              registered tool definitions
-    reflection.py                 quality reflection and diagnosis
-    verification.py               claim and citation verification
-    verification_metrics.py       verification metric computation
-    claim_verifier.py             deterministic claim checker
-    citation_extractor.py         URL and reference extraction
-    search.py                     search helpers and fallback
-    API.py                        SerpApi wrapper
+    reflection.py                 quality reflection and failure diagnosis
+    search.py                     SerpApi search with local fallback
+    API.py                        SerpApi HTTP wrapper
     filter.py                     weak result filtering
     extractor.py                  text signal extraction
     scoring.py                    composite quality scoring
-    query_handler.py              query rewriting and expansion
-    pipeline.py                   end-to-end pipeline wiring
-    ranking.py                    final ranker
+    query/
+      handler.py                  query normalisation and expansion
+      planner.py                  structured query planning
     classifier/
-      source_classifier.py
-      report_classifier.py
+      report_classifier.py        document type classification
+      source_classifier.py        source authority classification
     fetching/
-      document_fetcher.py
-      text_parser.py
-      parser.py
+      document_fetcher.py         HTTP fetch and HTML/PDF text extraction
+      text_parser.py              parse full text into sections and quality flags
+      parser.py                   parse SerpApi JSON responses
+    verification/
+      core.py                     claim extraction and verification orchestration
+      claims.py                   deterministic claim verifier
+      citations.py                URL and reference extraction
+      metrics.py                  verification metric computation
     runtime/
-      curated_benchmark.py        benchmark runner and tuner
+      curated_benchmark.py        benchmark runner and weight tuner
       evaluate_agent.py           agent evaluation harness
-      iteration_controller.py
-      exporter.py
-      schemas.py
+      iteration_controller.py     query rewriting on failure
+      exporter.py                 JSON/CSV export
+      schemas.py                  result dataclasses
   data/
-    dataset.json
-    benchmark_queries.csv
-    benchmark_labels.json
     curated_benchmark/
       queries.csv                 20 representative queries
-      documents.csv               5 candidate documents per query (real URLs)
+      documents.csv               5 candidate documents per query (100 total)
+      document_texts.csv          fetched full text per document
       retrieval_annotations.csv   relevance and result-class labels
       quality_annotations.csv     DEER-inspired quality labels
+      llm_quality_labels.csv      Qwen holistic quality scores (oracle)
+      tuning_results.json         recorded weight-tuning run results
       README.md
+    dataset.json
   scripts/
-    update_document_urls.py       renew document URLs via SerpApi search
-    annotate_benchmark.py         annotate benchmark with Qwen + heuristic
+    update_document_urls.py       refresh document URLs via SerpApi
+    annotate_benchmark.py         annotate benchmark with Qwen + heuristic labels
+    annotate_llm_score_labels.py  generate Qwen holistic quality labels
+    tune_final_from_llm_scores.py fit final-score coefficients to Qwen oracle
+  test/
+    test_dataset_scores.py        score all benchmark documents and report metrics
+    test_query_dataset.py         test query planning and search on benchmark queries
+    tune_from_llm_labels.py       Qwen oracle weight tuning (constrained regression)
+    tune_weights.py               weight tuning against quality_annotations.csv
+    fetch_document_texts.py       fetch and cache full text for benchmark documents
+    rebuild_benchmark_documents.py rebuild documents.csv from live SerpApi results
 ```
 
 ## Installation
@@ -103,7 +114,17 @@ Python 3.10+ is recommended.
 pip install -r requirements.txt
 ```
 
-Optional local Qwen support requires a downloaded `Qwen2.5-*-Instruct` model in the Hugging Face cache (`~/.cache/huggingface/hub/`). The main pipeline is fully deterministic without it.
+For local Qwen inference (optional, requires a downloaded `Qwen2.5-*-Instruct` model):
+
+```bash
+pip install transformers torch accelerate bitsandbytes protobuf sentencepiece
+```
+
+For benchmark tuning scripts:
+
+```bash
+pip install numpy scipy anthropic ddgs
+```
 
 ## Environment Variables
 
@@ -114,7 +135,12 @@ Optional local Qwen support requires a downloaded `Qwen2.5-*-Instruct` model in 
 | `QWEN_MODEL_PATH` | Override the Qwen model directory |
 | `QWEN_EXTRA_SITE_PACKAGES` | Point to a venv site-packages with torch/transformers |
 
-Do not commit API keys to the repository.
+The recommended way to set `SERPAPI_API_KEY` is a `.env` file at the project root — it is loaded automatically at startup and is already listed in `.gitignore`.
+
+```bash
+# .env
+SERPAPI_API_KEY=your_key_here
+```
 
 ## Running the Agent
 
@@ -130,6 +156,9 @@ python source/main.py "enterprise AI adoption benchmark report 2025" --json
 
 # Control verification depth
 python source/main.py "enterprise AI adoption benchmark report 2025" --verify-top-n 3
+
+# Suppress step-by-step logs
+python source/main.py "enterprise AI adoption benchmark report 2025" --quiet
 ```
 
 On Windows with a local venv:
@@ -146,17 +175,17 @@ Stop reason: sufficient_quality
 Processing time: 1842 ms
 
 Top Ranked Reports
-────────────────────────────────────────────────────────────────────────────────
+--------------------------------------------------------------------------------
 1. State of Enterprise AI Adoption Report 2025
    score=0.781  type=report  source=https://example.com/report.pdf
-   summary: Covers enterprise AI adoption trends for 2025.
+   summary: This report covers state of enterprise ai adoption. It is published by McKinsey.
    why: contains methodology, strong citation support, internally consistent analysis
-   verify: high confidence — Adoption increased by 35% in 2025.
+   verify: high confidence - Adoption increased by 35% year-over-year in enterprise deployments.
 ```
 
 ## Scoring
 
-The ranker uses four interpretable components:
+### Final Score
 
 ```text
 final_score =
@@ -166,47 +195,47 @@ final_score =
 + 0.15 × authority_score
 ```
 
+### Quality Sub-scores
+
+Six components blended into `quality_score` (tuned weights, applied 2026-04-30):
+
+| Component | Weight | What it measures |
+|---|---|---|
+| structure | 0.355 | Report-like section organisation |
+| claim_density | 0.273 | Verifiable analytical claims |
+| consistency | 0.131 | Coherent claims backed by data |
+| methodology | 0.100 | Research design, survey process, benchmark methodology |
+| data_density | 0.079 | Non-year numeric density |
+| citation | 0.062 | Citations, footnotes, named institutional sources |
+
+Weights were fit by constrained regression against a Qwen 7B holistic quality oracle on 100 benchmark documents (see `data/curated_benchmark/tuning_results.json`). Methodology is floored at 0.100 — its tuned-zero value reflected web-page text rather than real report PDFs.
+
 ### Relevance
 
 Measures query-topic overlap, ignoring generic terms like `pdf`, `report`, `industry`, `forecast`.
 
 ### Report Validity
 
-Estimates whether a candidate is a structured report rather than a blog, landing page, or news snippet. Signals: document length, PDF format hints, report section headings, methodology and reference language.
-
-### Quality
-
-Six sub-components blended into a single score:
-
-| Component | Weight | What it measures |
-|---|---|---|
-| methodology | 0.22 | Research design, survey description, benchmark process |
-| reference | 0.22 | Citations, footnotes, named institutional sources |
-| consistency | 0.18 | Coherent claims backed by data |
-| structure | 0.14 | Report-like section organisation |
-| data | 0.14 | Non-year numeric density |
-| claim | 0.10 | Verifiable analytical claims |
+Estimates whether a candidate is a structured report rather than a blog, landing page, or news snippet. Signals: document length, PDF format, section headings, methodology and reference language.
 
 ### Authority
 
-Classifies the publishing source (intergovernmental body, consulting firm, research provider, trade media, etc.).
+Classifies the publishing source: intergovernmental body, consulting firm, research provider, trade media, government, academic, or vendor.
 
 ## Verification and Reranking
 
-Implemented in `source/verification.py`, `claim_verifier.py`, `citation_extractor.py`, and `verification_metrics.py`. The verifier:
+The verification pipeline lives in `source/verification/`:
 
-- extracts important claims from top report text
-- extracts URLs and numbered references
-- maps claims to citation URLs
-- checks numeric matches and token overlap
-- classifies source reliability
-- computes 12 verification metrics
+- `core.py` — claim extraction, orchestration, and `attach_verification_notes()`
+- `citations.py` — URL and numbered-reference extraction
+- `claims.py` — deterministic lexical/numeric claim verification
+- `metrics.py` — 12 verification metrics (accuracy, coverage, diversity, reliability)
 
-Metrics are blended back into quality sub-components with bounded weights:
+Verification metrics are blended back into quality sub-components with bounded weights:
 
 ```text
 methodology = 80% original + 20% verification
-reference   = 65% original + 35% verification
+citation    = 65% original + 35% verification
 consistency = 70% original + 30% verification
 structure   = 85% original + 15% verification
 data        = 70% original + 30% verification
@@ -215,72 +244,76 @@ claim       = 70% original + 30% verification
 
 ## Curated Benchmark
 
-The benchmark lives in [`data/curated_benchmark/`](data/curated_benchmark/). It contains 20 queries, 5 candidate documents per query (100 total), relevance/ranking labels, and DEER-inspired quality labels.
-
-Document URLs point to real, live reports found via web search — not synthetic placeholders.
+The benchmark lives in [`data/curated_benchmark/`](data/curated_benchmark/). It contains 20 queries, 5 candidate documents per query (100 total), relevance/ranking labels, DEER-inspired quality labels, and Qwen holistic oracle scores.
 
 ### Refresh document URLs
 
-Searches SerpApi for each query and replaces any stale URLs in `documents.csv`:
+Searches SerpApi for each query and replaces stale URLs in `documents.csv`:
 
 ```bash
-SERPAPI_API_KEY=<key> python scripts/update_document_urls.py
-
+python scripts/update_document_urls.py
 # Preview without writing
-SERPAPI_API_KEY=<key> python scripts/update_document_urls.py --dry-run
+python scripts/update_document_urls.py --dry-run
 ```
 
 ### Re-annotate with Qwen
 
-Annotates all 100 documents with Qwen-generated quality labels, using a hybrid strategy: Qwen scores quality dimensions (evidence, transparency, recency, authority, relevance), heuristics resolve structural fields (`result_class`, `ranking_preference`, `deer_method_label`) that the small model cannot reliably classify from short snippets.
-
 ```bash
 # Requires USE_LOCAL_QWEN=1 and a downloaded Qwen2.5-*-Instruct model.
-# Use a single venv Python to avoid cross-venv torchvision conflicts.
-USE_LOCAL_QWEN=1 /path/to/venv/Scripts/python.exe scripts/annotate_benchmark.py
+USE_LOCAL_QWEN=1 python scripts/annotate_benchmark.py
 
 # Single query
-USE_LOCAL_QWEN=1 /path/to/venv/Scripts/python.exe scripts/annotate_benchmark.py --query q003
+USE_LOCAL_QWEN=1 python scripts/annotate_benchmark.py --query q003
 
 # Preview without saving
-USE_LOCAL_QWEN=1 /path/to/venv/Scripts/python.exe scripts/annotate_benchmark.py --dry-run
-
-# Without Qwen (heuristic-only fallback)
-python scripts/annotate_benchmark.py
+USE_LOCAL_QWEN=1 python scripts/annotate_benchmark.py --dry-run
 ```
 
-### Benchmark evaluation commands
+### Weight tuning
+
+```bash
+# Tune quality sub-score weights against Qwen holistic oracle labels
+python test/tune_from_llm_labels.py
+
+# Tune final-score component weights against Qwen oracle labels
+python scripts/tune_final_from_llm_scores.py
+```
+
+### Benchmark evaluation
 
 ```powershell
-# Validate and write benchmark starter
-.\.venv\Scripts\python.exe source\runtime\curated_benchmark.py --write
+# Score all benchmark documents
+.\.venv\Scripts\python.exe test\test_dataset_scores.py
 
-# Rank benchmark documents through the scoring path
+# Run full benchmark evaluation
 .\.venv\Scripts\python.exe source\runtime\curated_benchmark.py --rank
 
-# Tune final score weights
+# Tune final score weights via benchmark
 .\.venv\Scripts\python.exe source\runtime\curated_benchmark.py --tune --top-n 10
 ```
 
 ## Local Qwen Integration
 
-`local_qwen.py` provides optional on-device inference using a Hugging Face `Qwen2.5-*-Instruct` model. It is used in two places:
+`local_qwen.py` provides optional on-device inference using a Hugging Face `Qwen2.5-*-Instruct` model (7B recommended; loaded in 4-bit on CUDA when available). It is used for:
 
-- **`assess_text_signals`** — scores reference quality, methodology, consistency, and source authority from fetched report text, feeding additional signal into the main scoring pipeline.
-- **`suggest_search_queries`** / **`rewrite_search_query`** — generates improved search queries for a given topic.
+- **`suggest_search_queries`** / **`rewrite_search_query`** — improved search queries for a given topic
+- **`assess_text_signals`** — additional credibility signals fed into the scoring pipeline (opt-in via `USE_LOCAL_QWEN_SIGNALS=1`)
 
 Enable with:
 
 ```bash
 USE_LOCAL_QWEN=1 python source/main.py "..."
+
+# Point to a specific model
+QWEN_MODEL_PATH=/path/to/Qwen2.5-7B-Instruct-1M USE_LOCAL_QWEN=1 python source/main.py "..."
 ```
 
 The module discovers models and compatible venvs automatically. If inference fails, all functions return safe defaults and the pipeline continues without disruption.
 
 ## Design Notes
 
-- **Search is swappable** without touching scoring or verification.
-- **Scoring is weighted and interpretable** — each component has a documented formula and can be tuned independently.
+- **Search is swappable** — SerpApi and a local curated fallback are the only places where document sources enter the pipeline.
+- **Scoring is weighted and interpretable** — each sub-component has a documented formula and can be tuned independently against oracle labels.
 - **Verification is deterministic** — no LLM, no external calls beyond what was already fetched.
 - **Reflection and replanning** are controller-level behaviors separate from scoring logic.
-- **The benchmark is small but real** — 20 curated queries, live report URLs, document-specific Qwen annotations.
+- **The benchmark is small but real** — 20 curated queries, live report URLs, Qwen-annotated quality labels.

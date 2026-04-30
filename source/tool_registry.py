@@ -23,9 +23,14 @@ from source.verification import attach_verification_notes, extract_key_claims
 ToolCallable = Callable[..., Any]
 
 
-def search(query: str, count: int = 10) -> list[dict[str, Any]]:
+def search(
+    query: str,
+    count: int = 10,
+    topic: str | None = None,
+    year_terms: str | None = None,
+) -> list[dict[str, Any]]:
     """Use the normal API-first search path with local fallback."""
-    return search_reports(query, count=count, use_api=True)
+    return search_reports(query, count=count, use_api=True, topic=topic, year_terms=year_terms)
 
 
 def score_candidates(candidates: list[dict[str, Any]], query: str | None = None) -> list[dict[str, Any]]:

@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import requests
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
 
 
 DEFAULT_API_URL = "https://serpapi.com/search.json"

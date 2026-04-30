@@ -1,10 +1,21 @@
-# Core dependency used by `API.py` for optional HTTP-based search requests
-requests==2.32.5
+# ── Core ──────────────────────────────────────────────────────────────────────
+requests==2.32.5          # HTTP client used by API.py and document_fetcher
+python-dotenv>=1.0.0      # loads .env (SERPAPI_API_KEY) at import time
+pypdf>=4.0.0              # PDF text extraction in document_fetcher
 
-# Lightweight tokenizer/runtime helpers for optional local Qwen support
-protobuf>=6.0.0
-sentencepiece>=0.2.0
+# ── Optional: local Qwen inference ────────────────────────────────────────────
+# Required only when USE_LOCAL_QWEN=1.  Large install footprint (~2 GB+).
+# Install separately:  pip install transformers torch accelerate bitsandbytes
+#
+# transformers>=4.40.0
+# torch>=2.1.0
+# accelerate>=0.26.0
+# bitsandbytes>=0.43.0   # 4-bit GPU quantization
+# protobuf>=6.0.0
+# sentencepiece>=0.2.0
 
-# Optional local Qwen runtime (large install footprint)
-transformers>=4.40.0
-torch>=2.1.0
+# ── Optional: benchmark tuning (test/ scripts only) ───────────────────────────
+# numpy>=1.26.0
+# scipy>=1.11.0
+# anthropic>=0.20.0      # Claude API fallback in tune_from_llm_labels.py
+# ddgs>=9.0.0            # DuckDuckGo search in fetch_document_texts.py

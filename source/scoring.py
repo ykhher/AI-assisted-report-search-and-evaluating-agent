@@ -23,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from source.extractor import bottom_reference_score, footnote_score, institution_score
-from local_qwen import assess_text_signals
+
 
 _SECTION_KEYWORDS = ("introduction", "methodology", "results", "conclusion")
 _CLAIM_KEYWORDS = ("increase", "decrease", "forecast", "projected", "expected")
@@ -233,59 +233,38 @@ def compute_claim_density(text: str) -> float:
     return round(min((keyword_count / total_words) / 0.01, 1.0), 3)
 
 
-def in_text_citation_score(text: str) -> float:
-    """Backward-compatible wrapper for inline footnote detection."""
-    return footnote_score(text)
-
-
-def reference_section_score(text: str) -> float:
-    """Backward-compatible wrapper for numbered bottom-reference detection."""
-    return bottom_reference_score(text)
-
-
-def numbered_reference_score(text: str) -> float:
-    """Backward-compatible wrapper for numbered bottom-reference detection."""
-    return bottom_reference_score(text)
-
-
 def compute_citation_score(text: str) -> float:
-    """Blend heuristic and local-LLM evidence for references and source support."""
-    heuristic_score = max(bottom_reference_score(text), footnote_score(text))
-    heuristic_score += 0.2 * institution_score(text)
-
-    llm_scores = assess_text_signals(str(text))
-    reference_llm = _clamp01(llm_scores.get("reference_score", 0.0))
-    return round(min(max(heuristic_score, reference_llm), 1.0), 3)
+    """Compute citation evidence from heuristic signals."""
+    score = max(bottom_reference_score(text), footnote_score(text))
+    score += 0.2 * institution_score(text)
+    return round(min(score, 1.0), 3)
 
 
 def compute_consistency_score(text: str) -> float:
-    """Blend structural consistency heuristics with local LLM judgement."""
+    """Measure structural consistency by checking each section contains numeric or claim content."""
     lowered = str(text).lower()
     detected_sections = [section for section in _SECTION_KEYWORDS if section in lowered]
 
-    heuristic_score = 0.0
-    if detected_sections:
-        valid_sections = 0
-        for section in detected_sections:
-            start = lowered.find(section)
-            next_positions = [
-                lowered.find(other, start + 1)
-                for other in _SECTION_KEYWORDS
-                if lowered.find(other, start + 1) != -1
-            ]
-            end = min(next_positions) if next_positions else len(lowered)
-            segment = lowered[start:end]
+    if not detected_sections:
+        return 0.0
 
-            has_number = bool(_NUMBER_PATTERN.search(segment))
-            has_claim = any(keyword in segment for keyword in _CLAIM_KEYWORDS)
-            if has_number or has_claim:
-                valid_sections += 1
+    valid_sections = 0
+    for section in detected_sections:
+        start = lowered.find(section)
+        next_positions = [
+            lowered.find(other, start + 1)
+            for other in _SECTION_KEYWORDS
+            if lowered.find(other, start + 1) != -1
+        ]
+        end = min(next_positions) if next_positions else len(lowered)
+        segment = lowered[start:end]
 
-        heuristic_score = round(valid_sections / len(detected_sections), 3)
+        has_number = bool(_NUMBER_PATTERN.search(segment))
+        has_claim = any(keyword in segment for keyword in _CLAIM_KEYWORDS)
+        if has_number or has_claim:
+            valid_sections += 1
 
-    llm_scores = assess_text_signals(str(text))
-    consistency_llm = _clamp01(llm_scores.get("consistency_score", 0.0))
-    return round(max(heuristic_score, consistency_llm), 3)
+    return round(valid_sections / len(detected_sections), 3)
 
 
 def compute_relevance_score(query: str, text: str) -> float:
@@ -373,7 +352,6 @@ def compute_report_validity_score(doc: Mapping[str, Any], parsed: Mapping[str, A
         snippet_floor = 0.42 if is_pdf else 0.34
         score = max(score, snippet_floor)
     
-    # NEW: Blend with classifier validity if provided
     if classifier_validity is not None:
         classifier_val = _clamp01(classifier_validity)
         score = 0.6 * score + 0.4 * classifier_val
@@ -384,22 +362,19 @@ def compute_report_validity_score(doc: Mapping[str, Any], parsed: Mapping[str, A
 def compute_quality_score(signals: Mapping[str, Any], parsed: Mapping[str, Any] | None = None) -> float:
     """Compute intrinsic analytical quality from extracted signals.
 
-    Formula:
-    0.22 * methodology
-    + 0.22 * citation
-    + 0.18 * consistency
-    + 0.14 * structure
-    + 0.14 * data_support
-    + 0.10 * claim_density
+    Formula (tuned weights, methodology floor kept at 0.100):
+    0.100 * methodology
+    + 0.062 * citation
+    + 0.131 * consistency
+    + 0.355 * structure
+    + 0.079 * data_support
+    + 0.273 * claim_density
     """
     parsed = dict(parsed or {})
     raw_text = str(signals.get("_text", ""))
-    source_context = str(signals.get("source_name", signals.get("source_label", "")))
-    llm_scores = assess_text_signals(raw_text, source=source_context)
 
     methodology = max(
         _clamp01(signals.get("methodology", signals.get("has_methodology", 0))),
-        _clamp01(llm_scores.get("methodology_score", 0.0)),
         1.0 if parsed.get("has_methodology", False) else 0.0,
     )
     citation = max(
@@ -425,12 +400,12 @@ def compute_quality_score(signals: Mapping[str, Any], parsed: Mapping[str, Any] 
         claim_density = _blend_quality_component(claim_density, verification_components["claim_density"], 0.30)
 
     score = (
-        0.22 * methodology
-        + 0.22 * citation
-        + 0.18 * consistency
-        + 0.14 * structure
-        + 0.14 * data_support
-        + 0.10 * claim_density
+        0.100 * methodology
+        + 0.062 * citation
+        + 0.131 * consistency
+        + 0.355 * structure
+        + 0.079 * data_support
+        + 0.273 * claim_density
     )
 
     report_type = signals.get("report_type")
@@ -505,7 +480,6 @@ def compute_authority_score(source: Any, source_class: str | None = None, author
     3) numeric source score if already provided
     4) simple domain heuristic from source string
     """
-    # NEW: Use authority_prior from source_classifier if available
     if authority_prior is not None:
         prior = _clamp01(authority_prior)
         if prior > 0:
@@ -589,14 +563,12 @@ def compute_report_scores(report: Mapping[str, Any], query: str | None = None) -
     else:
         relevance_score = 0.0
 
-    # NEW: Pass classifier_validity to report validity computation
     classifier_validity = signals.get("report_validity_score_classifier")
     validity_score = compute_report_validity_score(local_doc, parsed, classifier_validity=classifier_validity)
     
     quality_score = compute_quality_score(signals, parsed)
 
     source_value = signals.get("source", report.get("source", signals.get("source_name", "")))
-    # NEW: Pass authority_prior from classifier
     authority_prior = signals.get("authority_prior")
     authority_score = compute_authority_score(
         source_value, 
@@ -673,22 +645,11 @@ def generate_reason(signals: Mapping[str, Any], relevance: float | None = None) 
     return "limited credibility indicators"
 
 
-def build_reason(signals: dict, rqi: float | None = None, relevance: float | None = None) -> str:
-    """Compatibility wrapper for existing pipeline imports."""
-    return generate_reason(signals, relevance=relevance)
-
-
 def rank_reports(reports: list, top_k: int | None = 10, query: str | None = None) -> list:
-    """Rank reports with explicit sub-scores while preserving old output keys.
+    """Rank reports with explicit sub-scores.
 
-    Each ranked result now includes:
-    - RQI (compatibility)
-    - score (compatibility, equals final_score)
-    - score_breakdown (new structured score dictionary)
-    - source_class (new: from source_classifier)
-    - authority_prior (new: from source_classifier)
-    - report_type (new: from report_classifier)
-    - report_validity_score_classifier (new: from report_classifier)
+    Each result includes score_breakdown, score (equals final_score), RQI (compat),
+    source_class, authority_prior, report_type, and report_validity_score_classifier.
     """
     ranked: list[dict[str, Any]] = []
 
@@ -709,10 +670,10 @@ def rank_reports(reports: list, top_k: int | None = 10, query: str | None = None
 
         reason = generate_reason(signals, relevance=score_dict["relevance_score"])
 
-        # NEW: Include classification outputs in final result
         ranked_item = {
             "title": report.get("title", ""),
             "url": report.get("url", ""),
+            "source": report.get("source", ""),
             "RQI": rqi,
             "score": score_dict["final_score"],
             "reason": reason,

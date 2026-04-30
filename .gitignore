@@ -6,3 +6,5 @@ outputs/
 .env.*
 *.key
 *credentials*.json
+.claude/
+Qwen2.5-7B-Instruct-1M/

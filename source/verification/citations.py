@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from source.verification_metrics import clean_url
+from source.verification.metrics import clean_url
 
 
 URL_PATTERN = re.compile(r"https?://[^\s\])}>\"']+|www\.[^\s\])}>\"']+", re.IGNORECASE)

@@ -5,10 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from source.citation_extractor import assign_citations_to_claims, extract_citations
-from source.claim_verifier import Claim, VerifiedClaim, VerificationResult
+from source.verification.citations import assign_citations_to_claims, extract_citations
+from source.verification.claims import Claim, VerifiedClaim, VerificationResult
+from source.verification.metrics import compute_metrics_from_notes
 from source.scoring import compute_verification_adjusted_quality_score
-from source.verification_metrics import compute_metrics_from_notes
 
 
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+|\n+")
@@ -27,7 +27,6 @@ def _claim_priority(sentence: str) -> tuple[int, int, int]:
     lowered = sentence.lower()
     has_numeric = int(bool(NUMERIC_PATTERN.search(sentence)))
     has_forecast = int(any(term in lowered for term in FORECAST_TERMS))
-    # Shorter sentences are usually easier to read in the CLI.
     return (has_numeric, has_forecast, -abs(len(sentence.split()) - 18))
 
 
